@@ -209,7 +209,7 @@ class SlaveMessageProcessor(LocaleMixin):
             tg_msg = self.slave_message_unsupported(msg, tg_dest, thread_id, msg_template, reactions, old_msg_id,
                                                     target_msg_id, reply_markup, silent)
         else:
-            self.bot.send_chat_action(tg_dest, ChatAction.TYPING)
+            self.bot.send_chat_action(tg_dest, ChatAction.TYPING, message_thread_id=thread_id)
             tg_msg = self.bot.send_message(tg_dest, prefix=msg_template, suffix=reactions,
                                            disable_notification=silent,
                                            message_thread_id=thread_id,
@@ -341,7 +341,7 @@ class SlaveMessageProcessor(LocaleMixin):
             The telegram bot message object sent
         """
         self.logger.debug("[%s] Sending as a text message.", msg.uid)
-        self.bot.send_chat_action(tg_dest, ChatAction.TYPING)
+        self.bot.send_chat_action(tg_dest, ChatAction.TYPING, message_thread_id=thread_id)
 
         text = self.html_substitutions(msg)
 
@@ -370,7 +370,7 @@ class SlaveMessageProcessor(LocaleMixin):
                            target_msg_id: Optional[TelegramMessageID] = None,
                            reply_markup: Optional[ReplyMarkup] = None,
                            silent: bool = False) -> telegram.Message:
-        self.bot.send_chat_action(tg_dest, ChatAction.TYPING)
+        self.bot.send_chat_action(tg_dest, ChatAction.TYPING, message_thread_id=thread_id)
 
         assert isinstance(msg.attributes, LinkAttribute)
         attributes: LinkAttribute = msg.attributes
@@ -416,7 +416,7 @@ class SlaveMessageProcessor(LocaleMixin):
                             reply_markup: Optional[ReplyMarkup] = None,
                             silent: bool = False) -> telegram.Message:
         assert msg.file
-        self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_PHOTO)
+        self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_PHOTO, message_thread_id=thread_id)
         self.logger.debug("[%s] Message is of %s type; Path: %s; MIME: %s", msg.uid, msg.type, msg.path, msg.mime)
         if msg.path:
             self.logger.debug("[%s] Size of %s is %s.", msg.uid, msg.path, os.stat(msg.path).st_size)
@@ -544,7 +544,7 @@ class SlaveMessageProcessor(LocaleMixin):
                                 target_msg_id: Optional[TelegramMessageID] = None,
                                 reply_markup: Optional[ReplyMarkup] = None,
                                 silent: bool = None) -> telegram.Message:
-        self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_PHOTO) # UPLOAD_VIDEO_NOTE might be better?
+        self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_PHOTO, message_thread_id=thread_id) # UPLOAD_VIDEO_NOTE might be better?
 
         self.logger.debug("[%s] Message is an Animation; Path: %s; MIME: %s", msg.uid, msg.path, msg.mime)
         if msg.path:
@@ -604,7 +604,7 @@ class SlaveMessageProcessor(LocaleMixin):
                               reply_markup: Optional[InlineKeyboardMarkup] = None,
                               silent: bool = False) -> telegram.Message:
 
-        self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_PHOTO)
+        self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_PHOTO, message_thread_id=thread_id)
 
         sticker_reply_markup = self.build_chat_info_inline_keyboard(msg, msg_template, reactions, reply_markup)
 
@@ -705,7 +705,7 @@ class SlaveMessageProcessor(LocaleMixin):
                            target_msg_id: Optional[TelegramMessageID] = None,
                            reply_markup: Optional[ReplyMarkup] = None,
                            silent: bool = False) -> telegram.Message:
-        self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_DOCUMENT)
+        self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_DOCUMENT, message_thread_id=thread_id)
 
         if msg.filename is None and msg.path is not None:
             file_name = os.path.basename(msg.path)
@@ -776,7 +776,7 @@ class SlaveMessageProcessor(LocaleMixin):
                             target_msg_id: Optional[TelegramMessageID] = None,
                             reply_markup: Optional[ReplyMarkup] = None,
                             silent: bool = False) -> telegram.Message:
-        self.bot.send_chat_action(tg_dest, ChatAction.RECORD_AUDIO)
+        self.bot.send_chat_action(tg_dest, ChatAction.RECORD_AUDIO, message_thread_id=thread_id)
         if msg.text:
             text = self.html_substitutions(msg)
         else:
@@ -846,7 +846,7 @@ class SlaveMessageProcessor(LocaleMixin):
                                silent: bool = False) -> telegram.Message:
         # Location messages cannot be edited in content by bots.
         # If an edit request comes, send a new message replying to the old one.
-        self.bot.send_chat_action(tg_dest, ChatAction.FIND_LOCATION)
+        self.bot.send_chat_action(tg_dest, ChatAction.FIND_LOCATION, message_thread_id=thread_id)
         assert (isinstance(msg.attributes, LocationAttribute))
         attributes: LocationAttribute = msg.attributes
         self.logger.info("[%s] Sending as a Telegram venue.\nlat: %s, long: %s\ntitle: %s\naddress: %s",
@@ -876,7 +876,7 @@ class SlaveMessageProcessor(LocaleMixin):
                             target_msg_id: Optional[TelegramMessageID] = None,
                             reply_markup: Optional[ReplyMarkup] = None,
                             silent: bool = False) -> telegram.Message:
-        self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_VIDEO)
+        self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_VIDEO, message_thread_id=thread_id)
         if msg.text:
             text = self.html_substitutions(msg)
         elif msg_template:
@@ -934,7 +934,7 @@ class SlaveMessageProcessor(LocaleMixin):
                                   silent: bool = False) -> telegram.Message:
         self.logger.debug("[%s] Sending as an unsupported message.", msg.uid)
         # Note: send_chat_action for unsupported might need adjustment if PTB changes behavior
-        self.bot.send_chat_action(tg_dest, ChatAction.TYPING)
+        self.bot.send_chat_action(tg_dest, ChatAction.TYPING, message_thread_id=thread_id)
         if msg.text:
             text = self.html_substitutions(msg)
         else:
@@ -964,15 +964,15 @@ class SlaveMessageProcessor(LocaleMixin):
         attributes = msg.attributes
         assert isinstance(attributes, StatusAttribute)
         if attributes.status_type is StatusAttribute.Types.TYPING:
-            self.bot.send_chat_action(tg_dest, ChatAction.TYPING)
+            self.bot.send_chat_action(tg_dest, ChatAction.TYPING, message_thread_id=thread_id)
         elif attributes.status_type is StatusAttribute.Types.UPLOADING_VOICE:
-            self.bot.send_chat_action(tg_dest, ChatAction.RECORD_AUDIO)
+            self.bot.send_chat_action(tg_dest, ChatAction.RECORD_AUDIO, message_thread_id=thread_id)
         elif attributes.status_type is StatusAttribute.Types.UPLOADING_IMAGE:
-            self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_PHOTO)
+            self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_PHOTO, message_thread_id=thread_id)
         elif attributes.status_type is StatusAttribute.Types.UPLOADING_VIDEO:
-            self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_VIDEO)
+            self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_VIDEO, message_thread_id=thread_id)
         elif attributes.status_type is StatusAttribute.Types.UPLOADING_FILE:
-            self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_DOCUMENT)
+            self.bot.send_chat_action(tg_dest, ChatAction.UPLOAD_DOCUMENT, message_thread_id=thread_id)
 
     def send_status(self, status: Status):
         if isinstance(status, ChatUpdates):
