@@ -546,6 +546,7 @@ class ChatBindingManager(LocaleMixin):
         chat: ETMChatType = data.chats[0]
         chat_display_name = chat.full_name
         slave_channel, slave_chat_uid = chat.module_id, chat.uid
+        chat_uid = utils.chat_id_to_str(slave_channel, slave_chat_uid)
         try:
             coordinator.get_module_by_id(slave_channel)
         except NameError:
@@ -566,6 +567,15 @@ class ChatBindingManager(LocaleMixin):
         msg = self.bot.send_message(tg_chat_to_link, text=txt)
 
         chat.link(self.channel.channel_id, ChatID(str(tg_chat_to_link)), self.channel.flag("multiple_slave_chats"))
+        try:
+            self.db.remove_topic_assoc(
+                topic_chat_id=self.channel.topic_group,
+                slave_uid=chat_uid,
+            )
+            #TODO delete or close the topic after link?
+        except Exception as e:
+            self.logger.warn("Error occurred while remove topic assoc.\nError: %s\n%s",
+                              repr(e), traceback.format_exc())
 
         txt = self._("Chat {0} is now linked.").format(chat_display_name)
         self.bot.edit_message_text(text=txt, chat_id=msg.chat.id, message_id=msg.message_id)
