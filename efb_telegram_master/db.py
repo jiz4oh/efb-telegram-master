@@ -191,7 +191,7 @@ class DatabaseManager:
         self.logger.debug("Database loaded.")
 
         self.logger.debug("Checking database migration...")
-        if not ChatAssoc.table_exists():
+        if not ChatAssoc.table_exists() or not TopicAssoc.table_exists():
             self._create()
         else:
             msg_log_columns = {i.name for i in database.get_columns("msglog")}
@@ -216,7 +216,7 @@ class DatabaseManager:
         """
         Initializing tables.
         """
-        database.create_tables([ChatAssoc, MsgLog, SlaveChatInfo])
+        database.create_tables([ChatAssoc, MsgLog, SlaveChatInfo, TopicAssoc])
 
     @staticmethod
     def _migrate(i: int):
