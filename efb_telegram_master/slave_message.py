@@ -238,9 +238,9 @@ class SlaveMessageProcessor(LocaleMixin):
             (Optional[TelegramChatID], Optional[TelegramTopicID]): Telegram destination chat ID and thread ID, None if muted.
         """
         xid = msg.uid
-        msg.chat = self.chat_manager.update_chat_obj(msg.chat)
-        author = self.chat_manager.get_or_enrol_member(msg.chat, msg.author)
-        msg.author = author
+        chat = self.chat_manager.update_chat_obj(msg.chat)
+        msg.chat = chat
+        msg.author = self.chat_manager.get_or_enrol_member(msg.chat, msg.author)
 
         chat_uid = utils.chat_id_to_str(chat=msg.chat)
         tg_chats = self.db.get_chat_assoc(slave_uid=chat_uid)
@@ -286,7 +286,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 try:
                     topic: ForumTopic = self.bot.create_forum_topic(
                         chat_id=self.channel.topic_group,
-                        name=author.name
+                        name=chat.name
                     )
                     tg_dest = self.channel.topic_group
                     thread_id = topic.message_thread_id
