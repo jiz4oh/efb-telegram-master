@@ -163,12 +163,19 @@ class MasterMessageProcessor(LocaleMixin):
 
         if destination is None:
             thread_id = message.message_thread_id
-            if thread_id and TelegramChatID(update.effective_chat.id) == self.channel.topic_group:
-                destination = self.db.get_topic_slave(message_thread_id=thread_id, topic_chat_id=self.channel.topic_group)
-                if destination:
-                    quote = message.reply_to_message.message_id != message.reply_to_message.message_thread_id
-                    if not quote:
-                        message.reply_to_message = None
+            if thread_id:
+                if TelegramChatID(update.effective_chat.id) == self.channel.topic_group:
+                    destination = self.db.get_topic_slave(message_thread_id=thread_id, topic_chat_id=self.channel.topic_group)
+                    if destination:
+                        quote = message.reply_to_message.message_id != message.reply_to_message.message_thread_id
+                        if not quote:
+                            message.reply_to_message = None
+                    else:
+                        self.logger.debug("[%s] Ignored message as it's a topic which wasn't created by this bot", mid)
+                        return
+                else:
+                    self.logger.debug("[%s] Ignored message as it's a invalid topic group.", mid)
+                    return
 
         if destination is None:  # not singly linked
             quote = False
