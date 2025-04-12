@@ -475,7 +475,7 @@ class ChatBindingManager(LocaleMixin):
 
     def link_chat_exec(self, update: Update, context: CallbackContext) -> int:
         """
-        Action to link a chat. Triggered by callback message with status `Flags.EXEC_LINK`.
+        Action to link a chat. Triggered by callback message with status `Flags.LINK_EXEC`.
         """
         assert isinstance(update, Update)
         assert update.effective_chat

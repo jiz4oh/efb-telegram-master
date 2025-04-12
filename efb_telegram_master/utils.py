@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 
 TelegramChatID = NewType('TelegramChatID', int)
+TelegramTopicThreadID = NewType('TelegramTopicThreadID', int)
 TelegramMessageID = NewType('TelegramMessageID', int)
 TgChatMsgIDStr = NewType('TgChatMsgIDStr', str)
 EFBChannelChatIDStr = NewType('EFBChannelChatIDStr', str)

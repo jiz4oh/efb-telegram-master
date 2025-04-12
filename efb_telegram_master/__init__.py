@@ -128,6 +128,9 @@ class TelegramChannel(MasterChannel):
         self.commands: CommandsManager = CommandsManager(self)
         self.chat_binding: ChatBindingManager = ChatBindingManager(self)
         self.slave_messages: SlaveMessageProcessor = SlaveMessageProcessor(self)
+        self.topic_group: Optional[TelegramChatID] = None
+        if self.config.get('topic_group', None):
+            self.topic_group: Optional[TelegramChatID] = TelegramChatID(self.config['topic_group'])
 
         if not self.flag('auto_locale'):
             self.translator = translation("efb_telegram_master",
@@ -322,9 +325,10 @@ class TelegramChannel(MasterChannel):
         assert isinstance(update.effective_message, telegram.Message)
         assert isinstance(update.effective_chat, telegram.Chat)
         if context.args:  # Group binding command
-            if update.effective_message.chat.type != telegram.Chat.PRIVATE or \
+            if (update.effective_message.chat.type != telegram.Chat.PRIVATE and update.effective_chat.id != self.topic_group) or \
                     (update.effective_message.forward_from_chat and
-                     update.effective_message.forward_from_chat.type == telegram.Chat.CHANNEL):
+                     update.effective_message.forward_from_chat.type == telegram.Chat.CHANNEL and
+                     update.effective_message.forward_from_chat.id != self.topic_group):
                 self.chat_binding.link_chat(update, context.args)
             else:
                 self.bot_manager.send_message(update.effective_chat.id,

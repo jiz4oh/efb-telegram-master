@@ -55,6 +55,11 @@ class BaseModel(Model):
         database = database
 
 
+class TopicAssoc(BaseModel):
+    topic_chat_id = TextField()
+    message_thread_id = TextField()
+    slave_uid = TextField()
+
 class ChatAssoc(BaseModel):
     master_uid = TextField()
     slave_uid = TextField()
@@ -67,6 +72,8 @@ class MsgLog(BaseModel):
     """Editable message ID from Telegram if ``master_msg_id`` is not editable
     and a separate one is sent.
     """
+    master_message_thread_id = TextField(null=True)
+    """Message thread ID from Telegram"""
     slave_message_id = TextField()
     """Message from slave channel."""
     text = TextField()
@@ -373,6 +380,60 @@ class DatabaseManager:
                 return []
         except DoesNotExist:
             return []
+
+    def add_topic_assoc(self, message_thread_id: EFBChannelChatIDStr,
+                       slave_uid: EFBChannelChatIDStr, 
+                       topic_chat_id: int):
+        """
+        Add topic associations (topic links).
+        One Master channel with many Slave channel.
+
+        Args:
+            message_thread_id (str): thread UID in topic
+            slave_uid (str): Slave channel UID ("%(channel_id)s.%(chat_id)s")
+        """
+        return TopicAssoc.create(topic_chat_id=topic_chat_id, message_thread_id=message_thread_id, slave_uid=slave_uid)
+
+    @staticmethod
+    def get_topic_thread_id(topic_chat_id: int,
+                       slave_uid: Optional[EFBChannelChatIDStr]
+                        ) -> int:
+        """
+        Get topic association (topic link) information.
+        Only one parameter is to be provided.
+
+        Args:
+            topic_chat_id (int): The topic UID
+            slave_uid (str): Slave channel UID ("%(channel_id)s.%(chat_id)s")
+
+        Returns:
+            The message thread_id
+        """
+        try:
+            return int(TopicAssoc.select(TopicAssoc.message_thread_id)\
+                .where(TopicAssoc.slave_uid == slave_uid, TopicAssoc.topic_chat_id == topic_chat_id).first().message_thread_id)
+        except DoesNotExist:
+            return None
+
+    def get_topic_slave(topic_chat_id: int,
+                        message_thread_id: int
+                        ) -> Optional[EFBChannelChatIDStr]:
+        """
+        Get topic association (topic link) information.
+        Only one parameter is to be provided.
+
+        Args:
+            topic_chat_id (int): The topic UID
+            message_thread_id (int): The message thread ID
+
+        Returns:
+            Slave channel UID ("%(channel_id)s.%(chat_id)s")
+        """
+        try:
+            return TopicAssoc.select(TopicAssoc.slave_uid)\
+                .where(TopicAssoc.message_thread_id == message_thread_id, TopicAssoc.topic_chat_id == topic_chat_id).first().slave_uid
+        except DoesNotExist:
+            return None
 
     def add_or_update_message_log(self,
                                   msg: ETMMsg,
