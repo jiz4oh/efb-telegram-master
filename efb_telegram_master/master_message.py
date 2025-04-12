@@ -163,6 +163,7 @@ class MasterMessageProcessor(LocaleMixin):
                 self.logger.debug("[%s] Chat %s is singly-linked to %s", mid, message.chat, destination)
 
         if destination is None:
+            thread_id = message.message_thread_id
             if thread_id and TelegramChatID(update.effective_chat.id) == self.channel.topic_group:
                 destination = self.db.get_topic_slave(message_thread_id=thread_id, topic_chat_id=self.channel.topic_group)
                 if destination:
@@ -172,7 +173,6 @@ class MasterMessageProcessor(LocaleMixin):
             quote = False
             self.logger.debug("[%s] Chat %s is not singly-linked", mid, update.effective_chat)
             reply_to = message.reply_to_message
-            thread_id = message.message_thread_id
             cached_dest = self.chat_dest_cache.get(str(message.chat.id))
             if reply_to:
                 self.logger.debug("[%s] Message is quote-replying to %s", mid, reply_to)

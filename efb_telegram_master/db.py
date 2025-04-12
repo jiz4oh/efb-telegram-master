@@ -418,8 +418,10 @@ class DatabaseManager:
             The message thread_id
         """
         try:
-            return int(TopicAssoc.select(TopicAssoc.message_thread_id)\
-                .where(TopicAssoc.slave_uid == slave_uid, TopicAssoc.topic_chat_id == topic_chat_id).first().message_thread_id)
+            assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
+                .where(TopicAssoc.slave_uid == slave_uid, TopicAssoc.topic_chat_id == topic_chat_id).first()
+            if assoc:
+                return int(assoc.message_thread_id)
         except DoesNotExist:
             return None
 

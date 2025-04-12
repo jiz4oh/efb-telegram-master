@@ -269,10 +269,11 @@ class SlaveMessageProcessor(LocaleMixin):
             tg_dest = self.channel.topic_group
             thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid, topic_chat_id=self.channel.topic_group)
             if not thread_id:
-                thread_id: int = self.bot.create_forum_topic(
+                topic: ForumTopic = self.bot.create_forum_topic(
                     chat_id=self.channel.topic_group,
-                    name=author
+                    name=author.name
                 )
+                thread_id = topic.message_thread_id
                 self.db.add_topic_assoc(
                     topic_chat_id=self.channel.topic_group,
                     message_thread_id=thread_id,
