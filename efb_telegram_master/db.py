@@ -204,6 +204,8 @@ class DatabaseManager:
                 self._migrate(2)
             elif "file_unique_id" not in msg_log_columns:
                 self._migrate(3)
+            elif "master_message_thread_id" not in msg_log_columns:
+                self._migrate(4)
         self.logger.debug("Database migration finished...")
 
     def stop_worker(self):
@@ -253,6 +255,12 @@ class DatabaseManager:
             # 2019NOV18
             migrate(
                 migrator.add_column("msglog", "file_unique_id", MsgLog.file_unique_id)
+            )
+        if i <= 4:
+            # Migration 4: Add column for message thread ID to message log table
+            # 2025APR12
+            migrate(
+                migrator.add_column("msglog", "master_message_thread_id", MsgLog.master_message_thread_id)
             )
 
     def add_chat_assoc(self, master_uid: EFBChannelChatIDStr,
@@ -463,6 +471,7 @@ class DatabaseManager:
 
         row.master_msg_id = master_msg_id
         row.master_msg_id_alt = master_msg_id_alt
+        row.master_message_thread_id = str(master_message.message_thread_id) if master_message.message_thread_id else None
         row.text = msg.text
         row.slave_origin_uid = chat_id_to_str(chat=msg.chat)
         row.slave_member_uid = chat_id_to_str(chat=msg.author)
