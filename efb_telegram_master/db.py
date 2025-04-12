@@ -425,6 +425,7 @@ class DatabaseManager:
         except DoesNotExist:
             return None
 
+    @staticmethod
     def get_topic_slave(topic_chat_id: int,
                         message_thread_id: int
                         ) -> Optional[EFBChannelChatIDStr]:
