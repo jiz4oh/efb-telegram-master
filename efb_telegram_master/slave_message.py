@@ -266,20 +266,41 @@ class SlaveMessageProcessor(LocaleMixin):
         if tg_chat:  # if this chat is linked
             tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]))
         elif self.channel.topic_group:
-            tg_dest = self.channel.topic_group
             thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid, topic_chat_id=self.channel.topic_group)
+            if thread_id:
+                try:
+                    self.bot.reopen_forum_topic(
+                        chat_id=self.channel.topic_group,
+                        message_thread_id=thread_id
+                    )
+                    tg_dest = self.channel.topic_group
+                except telegram.error.BadRequest as e:
+                    # expected behavior
+                    if e.message == "Topic_not_modified":
+                        tg_dest = self.channel.topic_group
+                        pass
+                    else:
+                        self.logger.error('Failed to reopen topic, Reason: %s', e)
+                        thread_id = None
             if not thread_id:
-                topic: ForumTopic = self.bot.create_forum_topic(
-                    chat_id=self.channel.topic_group,
-                    name=author.name
-                )
-                thread_id = topic.message_thread_id
-                self.db.add_topic_assoc(
-                    topic_chat_id=self.channel.topic_group,
-                    message_thread_id=thread_id,
-                    slave_uid=chat_uid,
-                )
-            return "", (tg_dest, thread_id)
+                try:
+                    topic: ForumTopic = self.bot.create_forum_topic(
+                        chat_id=self.channel.topic_group,
+                        name=author.name
+                    )
+                    tg_dest = self.channel.topic_group
+                    thread_id = topic.message_thread_id
+                    self.db.remove_topic_assoc(
+                        topic_chat_id=self.channel.topic_group,
+                        slave_uid=chat_uid,
+                    )
+                    self.db.add_topic_assoc(
+                        topic_chat_id=self.channel.topic_group,
+                        message_thread_id=thread_id,
+                        slave_uid=chat_uid,
+                    )
+                except telegram.error.BadRequest as e:
+                    self.logger.error('Failed to create topic, Reason: %s', e)
         else:
             singly_linked = False
 

@@ -445,8 +445,9 @@ class TelegramBotManager(LocaleMixin):
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
     def send_chat_action(self, *args, **kwargs):
-        if kwargs.get('message_thread_id', None) != None:
-            kwargs['api_kwargs'] = { "message_thread_id": kwargs.pop('message_thread_id') }
+        message_thread_id = kwargs.pop('message_thread_id', None)
+        if message_thread_id != None:
+            kwargs['api_kwargs'] = { "message_thread_id":  message_thread_id}
         return self.updater.bot.send_chat_action(*args, **kwargs)
 
     @Decorators.retry_on_timeout
@@ -549,6 +550,11 @@ class TelegramBotManager(LocaleMixin):
     @Decorators.retry_on_chat_migration
     def create_forum_topic(self, *args, **kwargs):
         return self.updater.bot.create_forum_topic(*args, **kwargs)
+
+    @Decorators.retry_on_timeout
+    @Decorators.retry_on_chat_migration
+    def reopen_forum_topic(self, *args, **kwargs) -> bool:
+        return self.updater.bot.reopen_forum_topic(*args, **kwargs)
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration

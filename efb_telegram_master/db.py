@@ -419,7 +419,8 @@ class DatabaseManager:
         """
         try:
             assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
-                .where(TopicAssoc.slave_uid == slave_uid, TopicAssoc.topic_chat_id == topic_chat_id).first()
+                .where(TopicAssoc.slave_uid == slave_uid, TopicAssoc.topic_chat_id == topic_chat_id)\
+                .order_by(TopicAssoc.id.desc()).first()
             if assoc:
                 return int(assoc.message_thread_id)
         except DoesNotExist:
@@ -445,6 +446,25 @@ class DatabaseManager:
                 .where(TopicAssoc.message_thread_id == message_thread_id, TopicAssoc.topic_chat_id == topic_chat_id).first().slave_uid
         except DoesNotExist:
             return None
+        except AttributeError: # Handle case where .slave_uid doesn't exist on the result
+            return None
+
+    @staticmethod
+    def remove_topic_assoc(topic_chat_id: int, slave_uid: Optional[EFBChannelChatIDStr] = None):
+        """
+        Remove topic association (topic link).
+
+        Args:
+            topic_chat_id (int): The topic group chat ID
+            slave_uid (str): Slave channel UID ("%(channel_id)s.%(chat_id)s")
+        """
+        try:
+            return TopicAssoc.delete().where(
+                (TopicAssoc.topic_chat_id == str(topic_chat_id)) &
+                (TopicAssoc.slave_uid == str(slave_uid))
+            ).execute()
+        except DoesNotExist:
+            return 0
 
     def add_or_update_message_log(self,
                                   msg: ETMMsg,
