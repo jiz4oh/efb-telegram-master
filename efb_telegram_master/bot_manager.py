@@ -445,7 +445,7 @@ class TelegramBotManager(LocaleMixin):
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
     def send_chat_action(self, *args, **kwargs):
-        if kwargs.get('message_thread_id'):
+        if kwargs.get('message_thread_id', None) != None:
             kwargs['api_kwargs'] = { "message_thread_id": kwargs.pop('message_thread_id') }
         return self.updater.bot.send_chat_action(*args, **kwargs)
 
