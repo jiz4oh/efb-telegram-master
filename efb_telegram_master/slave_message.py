@@ -286,7 +286,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 try:
                     topic: ForumTopic = self.bot.create_forum_topic(
                         chat_id=self.channel.topic_group,
-                        name=chat.name
+                        name=chat.chat_title
                     )
                     tg_dest = self.channel.topic_group
                     thread_id = topic.message_thread_id
