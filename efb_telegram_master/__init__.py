@@ -128,9 +128,7 @@ class TelegramChannel(MasterChannel):
         self.commands: CommandsManager = CommandsManager(self)
         self.chat_binding: ChatBindingManager = ChatBindingManager(self)
         self.slave_messages: SlaveMessageProcessor = SlaveMessageProcessor(self)
-        self.topic_group: Optional[TelegramChatID] = None
-        if self.config.get('topic_group', None):
-            self.topic_group: Optional[TelegramChatID] = TelegramChatID(self.config['topic_group'])
+        self.topic_group: Optional[TelegramChatID] = TelegramChatID(self.flag('topic_group'))
 
         if not self.flag('auto_locale'):
             self.translator = translation("efb_telegram_master",

@@ -56,6 +56,7 @@ class ExperimentalFlagsManager(LocaleMixin):
         "api_base_url": None,
         "api_base_file_url": None,
         "local_tdlib_api": False,
+        "topic_group": None,
     }
 
     def __init__(self, channel: 'TelegramChannel'):
