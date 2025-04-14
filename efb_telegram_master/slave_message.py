@@ -265,7 +265,7 @@ class SlaveMessageProcessor(LocaleMixin):
 
         if tg_chat:  # if this chat is linked
             tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]))
-        elif self.channel.topic_group:
+        elif not isinstance(chat, SystemChat) and self.channel.topic_group:
             thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid, topic_chat_id=self.channel.topic_group)
             if thread_id:
                 try:
