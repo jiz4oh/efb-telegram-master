@@ -1027,13 +1027,9 @@ class SlaveMessageProcessor(LocaleMixin):
                 except TelegramError as e:
                     self.logger.warning("Failed to delete message %s.%s: %s. Sending notification instead.", *old_msg_id, e)
                     pass
-                thread_id = None
-                if old_msg.master_message_thread_id:
-                    thread_id = TelegramTopicThreadID(old_msg.master_message_thread_id)
                 self.bot.send_message(chat_id=old_msg_id[0],
                                       text=self._("Message is removed in remote chat."),
                                       reply_to_message_id=old_msg_id[1],
-                                      message_thread_id=thread_id, # Send notification in the correct thread
                                       disable_notification=True) # Probably silent notification
             else:
                 self.logger.info('Was supposed to delete a message, '
@@ -1070,12 +1066,9 @@ class SlaveMessageProcessor(LocaleMixin):
         msg_template, _ = self.get_slave_msg_dest(old_msg)
         effective_msg = old_msg_db.master_msg_id_alt or old_msg_db.master_msg_id
         chat_id, msg_id = utils.message_id_str_to_id(effective_msg)
-        thread_id = None
-        if old_msg.master_message_thread_id:
-            thread_id = TelegramTopicThreadID(old_msg.master_message_thread_id)
 
         # Go through the ordinary update process
-        self.dispatch_message(old_msg, msg_template, old_msg_id=(chat_id, msg_id), tg_dest=chat_id, thread_id=thread_id)
+        self.dispatch_message(old_msg, msg_template, old_msg_id=(chat_id, msg_id), tg_dest=chat_id)
 
     def generate_message_template(self, msg: Message, singly_linked: bool) -> str:
         msg_prefix = ""  # For group member name
