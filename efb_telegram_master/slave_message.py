@@ -295,7 +295,9 @@ class SlaveMessageProcessor(LocaleMixin):
                         slave_uid=chat_uid,
                     )
                 except telegram.error.BadRequest as e:
-                    self.logger.error('Failed to create topic, Reason: %s', e)
+                    self.logger.info('Failed to create topic, Reason: %s', e)
+                    tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.group_chat)
+                    thread_id = None
         else:
             singly_linked = False
 
