@@ -404,15 +404,12 @@ class DatabaseManager:
         return TopicAssoc.create(topic_chat_id=topic_chat_id, message_thread_id=message_thread_id, slave_uid=slave_uid)
 
     @staticmethod
-    def get_topic_thread_id(topic_chat_id: int,
-                       slave_uid: Optional[EFBChannelChatIDStr]
-                        ) -> int:
+    def get_topic_thread_id(slave_uid: EFBChannelChatIDStr) -> int:
         """
         Get topic association (topic link) information.
         Only one parameter is to be provided.
 
         Args:
-            topic_chat_id (int): The topic UID
             slave_uid (str): Slave channel UID ("%(channel_id)s.%(chat_id)s")
 
         Returns:
@@ -420,7 +417,7 @@ class DatabaseManager:
         """
         try:
             assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
-                .where(TopicAssoc.slave_uid == slave_uid, TopicAssoc.topic_chat_id == topic_chat_id)\
+                .where(TopicAssoc.slave_uid == slave_uid)\
                 .order_by(TopicAssoc.id.desc()).first()
             if assoc:
                 return int(assoc.message_thread_id)

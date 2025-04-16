@@ -267,7 +267,7 @@ class SlaveMessageProcessor(LocaleMixin):
             tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]))
         elif not isinstance(chat, SystemChat) and self.channel.topic_group:
             tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
-            thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid, topic_chat_id=tg_dest)
+            thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
             if thread_id:
                 #TODO: Logic to reopen the topic if it was closed. Move to, when send message fails.
                 try:
