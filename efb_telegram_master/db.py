@@ -416,7 +416,7 @@ class DatabaseManager:
 
     @staticmethod
     def get_topic_slave(topic_chat_id: TelegramChatID,
-                        message_thread_id: TelegramTopicID
+                        message_thread_id: Optional[EFBChannelChatIDStr] = None,
                         ) -> Optional[EFBChannelChatIDStr]:
         """
         Get topic association (topic link) information.
@@ -430,8 +430,12 @@ class DatabaseManager:
             Slave channel UID ("%(channel_id)s.%(chat_id)s")
         """
         try:
-            return TopicAssoc.select(TopicAssoc.slave_uid)\
-                .where(TopicAssoc.message_thread_id == message_thread_id, TopicAssoc.topic_chat_id == topic_chat_id).first().slave_uid
+            if message_thread_id:
+                return TopicAssoc.select(TopicAssoc.slave_uid)\
+                    .where(TopicAssoc.message_thread_id == message_thread_id, TopicAssoc.topic_chat_id == topic_chat_id).first().slave_uid
+            else:
+                return TopicAssoc.select(TopicAssoc.slave_uid)\
+                    .where(TopicAssoc.topic_chat_id == topic_chat_id).first().slave_uid
         except DoesNotExist:
             return None
         except AttributeError:
