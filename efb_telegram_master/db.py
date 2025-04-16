@@ -451,19 +451,27 @@ class DatabaseManager:
             return None
 
     @staticmethod
-    def remove_topic_assoc(topic_chat_id: TelegramChatID, slave_uid: Optional[EFBChannelChatIDStr] = None):
+    def remove_topic_assoc(topic_chat_id: Optional[TelegramChatID] = None,
+                           message_thread_id: Optional[EFBChannelChatIDStr] = None,
+                           slave_uid: Optional[EFBChannelChatIDStr] = None):
         """
         Remove topic association (topic link).
 
         Args:
             topic_chat_id (TelegramChatID): The topic group chat ID
+            message_thread_id (EFBChannelChatIDStr): The topic thread ID
             slave_uid (EFBChannelChatIDStr): Slave channel UID ("%(channel_id)s.%(chat_id)s")
         """
         try:
-            return TopicAssoc.delete().where(
-                (TopicAssoc.topic_chat_id == str(topic_chat_id)) &
-                (TopicAssoc.slave_uid == str(slave_uid))
-            ).execute()
+            if bool(topic_chat_id and message_thread_id) == bool(slave_uid):
+                raise ValueError("Please provide either topic_chat_id and message_thread_id or slave_uid.")
+            elif topic_chat_id and message_thread_id:
+                return TopicAssoc.delete().where(
+                    (TopicAssoc.topic_chat_id == str(topic_chat_id)) &
+                    (TopicAssoc.message_thread_id == str(message_thread_id))
+                ).execute()
+            elif slave_uid:
+                return TopicAssoc.delete().where(TopicAssoc.slave_uid == slave_uid).execute()
         except DoesNotExist:
             return 0
 
