@@ -389,16 +389,17 @@ class DatabaseManager:
         except DoesNotExist:
             return []
 
-    def add_topic_assoc(self, message_thread_id: EFBChannelChatIDStr,
-                       slave_uid: EFBChannelChatIDStr, 
-                       topic_chat_id: int):
+    def add_topic_assoc(self, topic_chat_id: TelegramChatID,
+                       message_thread_id: EFBChannelChatIDStr,
+                       slave_uid: EFBChannelChatIDStr, ):
         """
         Add topic associations (topic links).
         One Master channel with many Slave channel.
 
         Args:
-            message_thread_id (str): thread UID in topic
-            slave_uid (str): Slave channel UID ("%(channel_id)s.%(chat_id)s")
+            topic_chat_id (TelegramChatID): The topic group chat ID
+            message_thread_id (EFBChannelChatIDStr): The topic thread ID
+            slave_uid (EFBChannelChatIDStr): Slave channel UID ("%(channel_id)s.%(chat_id)s")
         """
         return TopicAssoc.create(topic_chat_id=topic_chat_id, message_thread_id=message_thread_id, slave_uid=slave_uid)
 
@@ -450,13 +451,13 @@ class DatabaseManager:
             return None
 
     @staticmethod
-    def remove_topic_assoc(topic_chat_id: int, slave_uid: Optional[EFBChannelChatIDStr] = None):
+    def remove_topic_assoc(topic_chat_id: TelegramChatID, slave_uid: Optional[EFBChannelChatIDStr] = None):
         """
         Remove topic association (topic link).
 
         Args:
-            topic_chat_id (int): The topic group chat ID
-            slave_uid (str): Slave channel UID ("%(channel_id)s.%(chat_id)s")
+            topic_chat_id (TelegramChatID): The topic group chat ID
+            slave_uid (EFBChannelChatIDStr): Slave channel UID ("%(channel_id)s.%(chat_id)s")
         """
         try:
             return TopicAssoc.delete().where(
