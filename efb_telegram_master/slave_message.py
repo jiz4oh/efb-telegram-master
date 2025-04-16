@@ -119,7 +119,18 @@ class SlaveMessageProcessor(LocaleMixin):
 
             self.dispatch_message(msg, msg_template, old_msg_id, tg_dest, thread_id, silent)
         except Exception as e:
-            self.logger.error("Error occurred while processing message from slave channel.\nMessage: %s\n%s\n%s",
+            if isinstance(e, telegram.error.BadRequest) and e.message:
+                if "Topic" in e.message:
+                    try:
+                        self.bot.reopen_forum_topic(
+                            chat_id=tg_dest,
+                            message_thread_id=thread_id
+                        )
+                    except telegram.error.BadRequest as e:
+                        self.logger.error('Failed to reopen topic, Reason: %s', e)
+                        thread_id = None
+            else:
+                self.logger.error("Error occurred while processing message from slave channel.\nMessage: %s\n%s\n%s",
                               repr(msg), repr(e), traceback.format_exc())
         return msg
 
@@ -268,20 +279,6 @@ class SlaveMessageProcessor(LocaleMixin):
         elif not isinstance(chat, SystemChat) and self.channel.topic_group:
             tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
             thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
-            # if thread_id:
-                #TODO: Logic to reopen the topic if it was closed. Move to, when send message fails.
-                # try:
-                #     self.bot.reopen_forum_topic(
-                #         chat_id=tg_dest,
-                #         message_thread_id=thread_id
-                #     )
-                # except telegram.error.BadRequest as e:
-                #     # expected behavior
-                #     if e.message == "Topic_not_modified":
-                #         pass
-                #     else:
-                #         self.logger.error('Failed to reopen topic, Reason: %s', e)
-                #         thread_id = None
             if not thread_id:
                 try:
                     topic: ForumTopic = self.bot.create_forum_topic(
