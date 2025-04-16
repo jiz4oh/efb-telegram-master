@@ -164,7 +164,7 @@ class MasterMessageProcessor(LocaleMixin):
         if destination is None:
             thread_id = message.message_thread_id
             if thread_id:
-                destination = self.db.get_topic_slave(message_thread_id=thread_id, topic_chat_id=self.channel.topic_group)
+                destination = self.db.get_topic_slave(message_thread_id=thread_id, topic_chat_id=message.chat.id)
                 if destination:
                     quote = message.reply_to_message.message_id != message.reply_to_message.message_thread_id
                     if not quote:
