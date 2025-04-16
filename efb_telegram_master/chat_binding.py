@@ -580,9 +580,6 @@ class ChatBindingManager(LocaleMixin):
                     name=chat.chat_title
                 )
                 thread_id = topic.message_thread_id
-                self.db.remove_topic_assoc(
-                    slave_uid=chat_uid,
-                )
                 self.db.add_topic_assoc(
                     topic_chat_id=chat_id,
                     message_thread_id=thread_id,
