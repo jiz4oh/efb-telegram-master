@@ -11,7 +11,7 @@ from typing import Tuple, Dict, Optional, List, TYPE_CHECKING, IO, Union, Patter
 import telegram  # lgtm [py/import-and-import-from]
 from PIL import Image
 from telegram import Update, Message, TelegramError, InlineKeyboardButton, ChatAction, InlineKeyboardMarkup, \
-    ParseMode
+    ParseMode, ForumTopic
 from telegram.error import BadRequest
 from telegram.ext import ConversationHandler, CommandHandler, CallbackQueryHandler, CallbackContext, Filters, \
     MessageHandler
@@ -570,6 +570,28 @@ class ChatBindingManager(LocaleMixin):
         self.db.remove_topic_assoc(
             slave_uid=chat_uid,
         )
+
+        chat_id = utils.chat_id_to_str(self.channel.channel_id, ChatID(str(tg_chat_to_link)))
+        links = self.db.get_chat_assoc(master_uid=chat_id)
+        if len(links) > 1 and self.channel.topic_group:
+            try:
+                topic: ForumTopic = self.bot.create_forum_topic(
+                    chat_id=chat_id,
+                    name=chat.chat_title
+                )
+                thread_id = topic.message_thread_id
+                self.db.remove_topic_assoc(
+                    slave_uid=chat_uid,
+                )
+                self.db.add_topic_assoc(
+                    topic_chat_id=chat_id,
+                    message_thread_id=thread_id,
+                    slave_uid=chat_uid,
+                )
+                return thread_id
+            except telegram.error.BadRequest as e:
+                self.logger.error('Failed to create topic, Reason: %s', e)
+                return None
 
         txt = self._("Chat {0} is now linked.").format(chat_display_name)
         self.bot.edit_message_text(text=txt, chat_id=msg.chat.id, message_id=msg.message_id)
