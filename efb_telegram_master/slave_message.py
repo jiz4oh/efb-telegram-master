@@ -34,7 +34,7 @@ from .constants import Emoji
 from .locale_mixin import LocaleMixin
 from .message import ETMMsg
 from .msg_type import get_msg_type
-from .utils import TelegramChatID, TelegramTopicThreadID, TelegramMessageID, OldMsgID
+from .utils import TelegramChatID, TelegramTopicID, TelegramMessageID, OldMsgID
 
 if TYPE_CHECKING:
     from . import TelegramChannel
@@ -126,7 +126,7 @@ class SlaveMessageProcessor(LocaleMixin):
     def dispatch_message(self, msg: Message, msg_template: str,
                          old_msg_id: Optional[OldMsgID],
                          tg_dest: TelegramChatID,
-                         thread_id: Optional[TelegramTopicThreadID],
+                         thread_id: Optional[TelegramTopicID],
                          silent: bool = False):
         """Dispatch with header, destination and Telegram message ID and destinations."""
 
@@ -230,7 +230,7 @@ class SlaveMessageProcessor(LocaleMixin):
         self.db.add_or_update_message_log(etm_msg, tg_msg, old_msg_id)
         # self.logger.debug("[%s] Message inserted/updated to the database.", xid)
 
-    def get_slave_msg_dest(self, msg: Message) -> Tuple[str, Tuple[Optional[TelegramChatID], Optional[TelegramTopicThreadID]]]:
+    def get_slave_msg_dest(self, msg: Message) -> Tuple[str, Tuple[Optional[TelegramChatID], Optional[TelegramTopicID]]]:
         """Get the Telegram destination of a message with its header.
 
         Returns:
@@ -246,7 +246,7 @@ class SlaveMessageProcessor(LocaleMixin):
         tg_chats = self.db.get_chat_assoc(slave_uid=chat_uid)
         tg_chat = None
         tg_dest: Optional[TelegramChatID] = None
-        thread_id: Optional[TelegramTopicThreadID] = None
+        thread_id: Optional[TelegramTopicID] = None
 
         if tg_chats:
             tg_chat = tg_chats[0]
@@ -338,7 +338,7 @@ class SlaveMessageProcessor(LocaleMixin):
         return text
 
     def slave_message_text(self, msg: Message, tg_dest: TelegramChatID,
-                           thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                           thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                            old_msg_id: OldMsgID = None,
                            target_msg_id: Optional[TelegramMessageID] = None,
                            reply_markup: Optional[ReplyMarkup] = None,
@@ -384,7 +384,7 @@ class SlaveMessageProcessor(LocaleMixin):
         return tg_msg
 
     def slave_message_link(self, msg: Message, tg_dest: TelegramChatID,
-                           thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                           thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                            old_msg_id: OldMsgID = None,
                            target_msg_id: Optional[TelegramMessageID] = None,
                            reply_markup: Optional[ReplyMarkup] = None,
@@ -429,7 +429,7 @@ class SlaveMessageProcessor(LocaleMixin):
     """Threshold of aspect ratio (longer side to shorter side) to send as file, used alone."""
 
     def slave_message_image(self, msg: Message, tg_dest: TelegramChatID,
-                            thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                            thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                             old_msg_id: OldMsgID = None,
                             target_msg_id: Optional[TelegramMessageID] = None,
                             reply_markup: Optional[ReplyMarkup] = None,
@@ -558,7 +558,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 msg.file.close()
 
     def slave_message_animation(self, msg: Message, tg_dest: TelegramChatID,
-                                thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                                thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                                 old_msg_id: OldMsgID = None,
                                 target_msg_id: Optional[TelegramMessageID] = None,
                                 reply_markup: Optional[ReplyMarkup] = None,
@@ -617,7 +617,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 msg.file.close()
 
     def slave_message_sticker(self, msg: Message, tg_dest: TelegramChatID,
-                              thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                              thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                               old_msg_id: OldMsgID = None,
                               target_msg_id: Optional[TelegramMessageID] = None,
                               reply_markup: Optional[InlineKeyboardMarkup] = None,
@@ -719,7 +719,7 @@ class SlaveMessageProcessor(LocaleMixin):
 
 
     def slave_message_file(self, msg: Message, tg_dest: TelegramChatID,
-                           thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                           thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                            old_msg_id: OldMsgID = None,
                            target_msg_id: Optional[TelegramMessageID] = None,
                            reply_markup: Optional[ReplyMarkup] = None,
@@ -790,7 +790,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 msg.file.close()
 
     def slave_message_voice(self, msg: Message, tg_dest: TelegramChatID,
-                            thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                            thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                             old_msg_id: OldMsgID = None,
                             target_msg_id: Optional[TelegramMessageID] = None,
                             reply_markup: Optional[ReplyMarkup] = None,
@@ -858,7 +858,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 msg.file.close()
 
     def slave_message_location(self, msg: Message, tg_dest: TelegramChatID,
-                               thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                               thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                                old_msg_id: OldMsgID = None,
                                target_msg_id: Optional[TelegramMessageID] = None,
                                reply_markup: Optional[InlineKeyboardMarkup] = None,
@@ -890,7 +890,7 @@ class SlaveMessageProcessor(LocaleMixin):
                                       disable_notification=silent)
 
     def slave_message_video(self, msg: Message, tg_dest: TelegramChatID,
-                            thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                            thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                             old_msg_id: OldMsgID = None,
                             target_msg_id: Optional[TelegramMessageID] = None,
                             reply_markup: Optional[ReplyMarkup] = None,
@@ -946,7 +946,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 msg.file.close()
 
     def slave_message_unsupported(self, msg: Message, tg_dest: TelegramChatID,
-                                  thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                                  thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                                   old_msg_id: OldMsgID = None,
                                   target_msg_id: Optional[TelegramMessageID] = None,
                                   reply_markup: Optional[ReplyMarkup] = None,
@@ -979,7 +979,7 @@ class SlaveMessageProcessor(LocaleMixin):
         return tg_msg
 
     def slave_message_status(self, msg: Message, tg_dest: TelegramChatID,
-                             thread_id: Optional[TelegramTopicThreadID]):
+                             thread_id: Optional[TelegramTopicID]):
         attributes = msg.attributes
         assert isinstance(attributes, StatusAttribute)
         if attributes.status_type is StatusAttribute.Types.TYPING:

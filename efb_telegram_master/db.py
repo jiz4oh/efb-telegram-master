@@ -22,7 +22,7 @@ from .chat_object_cache import ChatObjectCacheManager
 from .message import ETMMsg
 from .msg_type import TGMsgType
 from .utils import TelegramChatID, EFBChannelChatIDStr, TgChatMsgIDStr, message_id_to_str, \
-    chat_id_to_str, OldMsgID, chat_id_str_to_id, TelegramMessageID
+    chat_id_to_str, OldMsgID, chat_id_str_to_id, TelegramMessageID, TelegramTopicID
 
 if TYPE_CHECKING:
     from . import TelegramChannel
@@ -394,13 +394,13 @@ class DatabaseManager:
         return TopicAssoc.create(topic_chat_id=topic_chat_id, message_thread_id=message_thread_id, slave_uid=slave_uid)
 
     @staticmethod
-    def get_topic_thread_id(slave_uid: EFBChannelChatIDStr) -> int:
+    def get_topic_thread_id(slave_uid: EFBChannelChatIDStr) -> TelegramTopicID:
         """
         Get topic association (topic link) information.
         Only one parameter is to be provided.
 
         Args:
-            slave_uid (str): Slave channel UID ("%(channel_id)s.%(chat_id)s")
+            slave_uid (EFBChannelChatIDStr): Slave channel UID ("%(channel_id)s.%(chat_id)s")
 
         Returns:
             The message thread_id
@@ -415,16 +415,16 @@ class DatabaseManager:
             return None
 
     @staticmethod
-    def get_topic_slave(topic_chat_id: int,
-                        message_thread_id: int
+    def get_topic_slave(topic_chat_id: TelegramChatID,
+                        message_thread_id: TelegramTopicID
                         ) -> Optional[EFBChannelChatIDStr]:
         """
         Get topic association (topic link) information.
         Only one parameter is to be provided.
 
         Args:
-            topic_chat_id (int): The topic UID
-            message_thread_id (int): The message thread ID
+            topic_chat_id (TelegramChatID): The topic UID
+            message_thread_id (TelegramTopicID): The message thread ID
 
         Returns:
             Slave channel UID ("%(channel_id)s.%(chat_id)s")
@@ -434,7 +434,7 @@ class DatabaseManager:
                 .where(TopicAssoc.message_thread_id == message_thread_id, TopicAssoc.topic_chat_id == topic_chat_id).first().slave_uid
         except DoesNotExist:
             return None
-        except AttributeError: # Handle case where .slave_uid doesn't exist on the result
+        except AttributeError:
             return None
 
     @staticmethod
