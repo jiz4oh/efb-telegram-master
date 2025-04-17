@@ -151,6 +151,8 @@ class ChatBindingManager(LocaleMixin):
 
         self.bot.dispatcher.add_handler(
             MessageHandler(Filters.status_update.migrate, self.chat_migration))
+        self.bot.dispatcher.add_handler(
+            MessageHandler(Filters.status_update.left_chat_member, self.chat_left))
 
     def pre_link_check(self, message: Message):
         """Check if the bot would work properly in a linked group.
@@ -954,6 +956,18 @@ class ChatBindingManager(LocaleMixin):
                 picture.close()
             if pic_resized and getattr(pic_resized, 'close', None):
                 pic_resized.close()
+
+    def chat_left(self, update: Update, context: CallbackContext):
+        """Triggered by any message update with either
+        ``left_chat_member``.
+        """
+        assert isinstance(update, Update)
+        assert update.effective_message
+
+        message = update.effective_message
+        if message.left_chat_member is not None and message.left_chat_member.id == self.bot.me.id:
+            chat_id = ChatID(str(message.chat.id))
+            self.db.remove_chat_assoc(master_uid=utils.chat_id_to_str(self.channel.channel_id, chat_id))
 
     def chat_migration(self, update: Update, context: CallbackContext):
         """Triggered by any message update with either
