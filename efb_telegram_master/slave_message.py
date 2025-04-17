@@ -5,8 +5,10 @@ import itertools
 import logging
 import os
 import tempfile
+import threading
 import traceback
 import urllib.parse
+from collections import defaultdict
 from pathlib import Path
 from typing import Tuple, Optional, TYPE_CHECKING, List, IO, Union
 
@@ -53,6 +55,7 @@ class SlaveMessageProcessor(LocaleMixin):
         self.db: 'DatabaseManager' = channel.db
         self.chat_dest_cache: ChatDestinationCache = channel.chat_dest_cache
         self.chat_manager: ChatObjectCacheManager = channel.chat_manager
+        self._topic_creation_locks = defaultdict(threading.Lock)
 
     def is_silent(self, msg: Message) -> Optional[bool]:
         """Determine if a message shall be sent silently.
@@ -267,6 +270,7 @@ class SlaveMessageProcessor(LocaleMixin):
             tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]))
         elif not isinstance(chat, SystemChat) and self.channel.topic_group:
             thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid, topic_chat_id=self.channel.topic_group)
+            topic_is_deleted = False
             if thread_id:
                 try:
                     self.bot.reopen_forum_topic(
@@ -281,26 +285,30 @@ class SlaveMessageProcessor(LocaleMixin):
                         pass
                     else:
                         self.logger.error('Failed to reopen topic, Reason: %s', e)
+                        topic_is_deleted = True
                         thread_id = None
             if not thread_id:
-                try:
-                    topic: ForumTopic = self.bot.create_forum_topic(
-                        chat_id=self.channel.topic_group,
-                        name=chat.chat_title
-                    )
-                    tg_dest = self.channel.topic_group
-                    thread_id = topic.message_thread_id
-                    self.db.remove_topic_assoc(
-                        topic_chat_id=self.channel.topic_group,
-                        slave_uid=chat_uid,
-                    )
-                    self.db.add_topic_assoc(
-                        topic_chat_id=self.channel.topic_group,
-                        message_thread_id=thread_id,
-                        slave_uid=chat_uid,
-                    )
-                except telegram.error.BadRequest as e:
-                    self.logger.error('Failed to create topic, Reason: %s', e)
+                with self._topic_creation_locks[self.channel.topic_group]:
+                    thread_id = not topic_is_deleted and self.db.get_topic_thread_id(slave_uid=chat_uid, topic_chat_id=self.channel.topic_group)
+                    if not thread_id:
+                        try:
+                            topic: ForumTopic = self.bot.create_forum_topic(
+                                chat_id=self.channel.topic_group,
+                                name=chat.chat_title
+                            )
+                            tg_dest = self.channel.topic_group
+                            thread_id = topic.message_thread_id
+                            self.db.remove_topic_assoc(
+                                topic_chat_id=self.channel.topic_group,
+                                slave_uid=chat_uid,
+                            )
+                            self.db.add_topic_assoc(
+                                topic_chat_id=self.channel.topic_group,
+                                message_thread_id=thread_id,
+                                slave_uid=chat_uid,
+                            )
+                        except telegram.error.BadRequest as e:
+                            self.logger.error('Failed to create topic, Reason: %s', e)
         else:
             singly_linked = False
 
