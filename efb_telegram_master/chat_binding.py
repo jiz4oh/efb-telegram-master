@@ -223,6 +223,22 @@ class ChatBindingManager(LocaleMixin):
                 self.link_handler.conversations[storage_id] = Flags.LINK_EXEC
                 self.msg_storage[storage_id] = ChatListStorage([chat])
                 return self.build_link_action_message(chat, tg_chat_id, tg_msg_id)
+            if rtm.chat.is_forum:
+                topic = rtm.message_thread_id
+                if topic:
+                    slave_origin_uid = self.db.get_topic_slave(
+                        topic_chat_id=utils.chat_id_to_str(self.channel.channel_id, ChatID(str(rtm.chat.id))),
+                        message_thread_id=topic
+                    )
+                    if slave_origin_uid:
+                        channel_id, chat_id, _ = utils.chat_id_str_to_id(slave_origin_uid)
+                        chat: ETMChatType = self.chat_manager.get_chat(channel_id, chat_id, build_dummy=True)
+                        tg_chat_id = TelegramChatID(message.chat_id)
+                        tg_msg_id = TelegramMessageID(message.reply_text(self._("Processing...")).message_id)
+                        storage_id: Tuple[TelegramChatID, TelegramMessageID] = (tg_chat_id, tg_msg_id)
+                        self.link_handler.conversations[storage_id] = Flags.LINK_EXEC
+                        self.msg_storage[storage_id] = ChatListStorage([chat])
+                        return self.build_link_action_message(chat, tg_chat_id, tg_msg_id)
 
         if message.chat.type != telegram.Chat.PRIVATE:
             links = self.db.get_chat_assoc(
