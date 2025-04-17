@@ -11,7 +11,7 @@ from typing import Tuple, Dict, Optional, List, TYPE_CHECKING, IO, Union, Patter
 import telegram  # lgtm [py/import-and-import-from]
 from PIL import Image
 from telegram import Update, Message, TelegramError, InlineKeyboardButton, ChatAction, InlineKeyboardMarkup, \
-    ParseMode, ForumTopic
+    ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ConversationHandler, CommandHandler, CallbackQueryHandler, CallbackContext, Filters, \
     MessageHandler
