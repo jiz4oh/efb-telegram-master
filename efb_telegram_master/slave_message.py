@@ -289,7 +289,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 master_chat_info = self.bot.get_chat_info(tg_dest)
                 if master_chat_info.is_forum:
                     with self._topic_creation_locks[tg_dest]:
-                        thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid, topic_chat_id=self.channel.topic_group)
+                        thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
                         if not thread_id:
                             try:
                                 topic: ForumTopic = self.bot.create_forum_topic(
