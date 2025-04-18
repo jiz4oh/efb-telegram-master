@@ -168,16 +168,27 @@ class MasterMessageProcessor(LocaleMixin):
                         quote = False
 
         if destination is None:
-            thread_id = message.message_thread_id
-            if thread_id:
-                destination = self.db.get_topic_slave(message_thread_id=thread_id, topic_chat_id=message.chat.id)
-                if destination:
-                    quote = message.reply_to_message.message_id != message.reply_to_message.message_thread_id
-                    if not quote:
-                        message.reply_to_message = None
+            if message.chat.is_forum:
+                topic_destinations = self.db.get_topic_slaves(topic_chat_id=message.chat.id)
+                thread_id = message.message_thread_id
+                if thread_id:
+                    for (destination, topic_id) in topic_destinations:
+                        if topic_id == thread_id:
+                            self.logger.debug("[%s] Chat %s is singly-linked to %s in topic %s", mid, message.chat, destination, topic_id)
+                            destination = destination
+                            quote = message.reply_to_message.message_id != message.reply_to_message.message_thread_id
+                            if quote:
+                                message.reply_to_message = None
+                            break
+                    if destination is None:
+                        self.logger.debug("[%s] Ignored message as it's a topic which wasn't created by this bot", mid)
+                        return
                 else:
-                    self.logger.debug("[%s] Ignored message as it's a topic which wasn't created by this bot", mid)
-                    return
+                    self.logger.debug("[%s] Chat %s is a forum, but no thread ID is found.", mid, message.chat)
+                    destinations = self.db.get_chat_assoc(master_uid=utils.chat_id_to_str(self.channel_id, ChatID(str(message.chat.id))))
+                    if len(destinations) == len(topic_destinations):
+                        self.logger.debug("[%s] Chat %s is a forum, and all destinations are in topics. The new message is not in any topic, so ignore it.", mid, message.chat)
+                        return
 
         if destination is None:  # not singly linked
             quote = False
