@@ -166,6 +166,7 @@ class MasterMessageProcessor(LocaleMixin):
                         self.logger.debug("[%s] Chat %s is singly-linked to %s, but the thread ID is not matching.", mid, message.chat, destination)
                         destination = None
                         quote = False
+                        return
 
         if destination is None:
             if message.chat.is_forum:
