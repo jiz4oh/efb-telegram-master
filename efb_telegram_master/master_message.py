@@ -160,6 +160,12 @@ class MasterMessageProcessor(LocaleMixin):
             if destination:
                 quote = message.reply_to_message is not None
                 self.logger.debug("[%s] Chat %s is singly-linked to %s", mid, message.chat, destination)
+                if message.is_forum:
+                    ideal_thread_id = self.db.get_topic_thread_id(slave_uid=destination)
+                    if ideal_thread_id and ideal_thread_id != message.message_thread_id:
+                        self.logger.debug("[%s] Chat %s is singly-linked to %s, but the thread ID is not matching.", mid, message.chat, destination)
+                        destination = None
+                        quote = False
 
         if destination is None:
             thread_id = message.message_thread_id
