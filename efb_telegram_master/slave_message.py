@@ -279,14 +279,12 @@ class SlaveMessageProcessor(LocaleMixin):
 
         # Generate chat text template & Decide type target
         tg_dest = TelegramChatID(self.channel.config['admins'][0])
-
-        if tg_chat and singly_linked:
+        
+        if tg_chat:
             tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]))
-            thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
-        elif not isinstance(chat, SystemChat) and self.channel.topic_group:
-            tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
-            thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
-            if not thread_id:
+        if self.channel.topic_group:
+            if not isinstance(chat, SystemChat):
+                tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
                 master_chat_info = self.bot.get_chat_info(tg_dest)
                 if master_chat_info.is_forum:
                     with self._topic_creation_locks[tg_dest]:
