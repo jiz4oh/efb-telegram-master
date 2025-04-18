@@ -305,8 +305,11 @@ class SlaveMessageProcessor(LocaleMixin):
                                 self.logger.info('Failed to create topic, Reason: %s', e)
                                 tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
                                 thread_id = None
-        else:
+
+        if not tg_chat:
             singly_linked = False
+        if thread_id:
+            singly_linked = True
 
         msg_template = self.generate_message_template(msg, singly_linked)
         self.logger.debug("[%s] Message is sent to Telegram chat %s, with header \"%s\".",
