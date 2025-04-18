@@ -442,6 +442,26 @@ class DatabaseManager:
             return None
 
     @staticmethod
+    def get_topic_slaves(topic_chat_id: TelegramChatID) -> Optional[List[Tuple[EFBChannelChatIDStr, TelegramTopicID]]]:
+        """
+        Get topic association (topic link) information.
+        Only one parameter is to be provided.
+
+        Args:
+            topic_chat_id (TelegramChatID): The topic UID
+
+        Returns:
+            List[Tuple[EFBChannelChatIDStr, TelegramTopicID]]: A list of tuples containing slave channel UID and message thread ID
+        """
+        try:
+            return TopicAssoc.select(TopicAssoc.slave_uid, TopicAssoc.message_thread_id)\
+                .where(TopicAssoc.topic_chat_id == topic_chat_id).order_by(TopicAssoc.id.desc()).tuples()
+        except DoesNotExist:
+            return None
+        except AttributeError:
+            return None
+
+    @staticmethod
     def remove_topic_assoc(topic_chat_id: Optional[TelegramChatID] = None,
                            message_thread_id: Optional[EFBChannelChatIDStr] = None,
                            slave_uid: Optional[EFBChannelChatIDStr] = None):
