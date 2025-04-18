@@ -290,21 +290,23 @@ class SlaveMessageProcessor(LocaleMixin):
                     thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
                     if not thread_id:
                         with self._topic_creation_locks[tg_dest]:
-                            try:
-                                topic: ForumTopic = self.bot.create_forum_topic(
-                                    chat_id=tg_dest,
-                                    name=chat.chat_title
-                                )
-                                thread_id = topic.message_thread_id
-                                self.db.add_topic_assoc(
-                                    topic_chat_id=tg_dest,
-                                    message_thread_id=thread_id,
-                                    slave_uid=chat_uid,
-                                )
-                            except telegram.error.BadRequest as e:
-                                self.logger.info('Failed to create topic, Reason: %s', e)
-                                tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
-                                thread_id = None
+                            thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
+                            if not thread_id:
+                                try:
+                                    topic: ForumTopic = self.bot.create_forum_topic(
+                                        chat_id=tg_dest,
+                                        name=chat.chat_title
+                                    )
+                                    thread_id = topic.message_thread_id
+                                    self.db.add_topic_assoc(
+                                        topic_chat_id=tg_dest,
+                                        message_thread_id=thread_id,
+                                        slave_uid=chat_uid,
+                                    )
+                                except telegram.error.BadRequest as e:
+                                    self.logger.info('Failed to create topic, Reason: %s', e)
+                                    tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
+                                    thread_id = None
 
         if not tg_chat:
             singly_linked = False
