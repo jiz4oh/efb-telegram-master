@@ -415,7 +415,7 @@ class DatabaseManager:
             return None
 
     @staticmethod
-    def get_topic_slave(topic_chat_id: TelegramChatID,
+    def get_topic_slave(topic_chat_id: TelegramTopicID,
                         message_thread_id: Optional[EFBChannelChatIDStr] = None,
                         ) -> Optional[EFBChannelChatIDStr]:
         """
@@ -423,7 +423,7 @@ class DatabaseManager:
         Only one parameter is to be provided.
 
         Args:
-            topic_chat_id (TelegramChatID): The topic UID
+            topic_chat_id (TelegramTopicID): The topic UID
             message_thread_id (TelegramTopicID): The message thread ID
 
         Returns:
