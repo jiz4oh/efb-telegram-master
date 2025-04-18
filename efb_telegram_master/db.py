@@ -454,8 +454,9 @@ class DatabaseManager:
             List[Tuple[EFBChannelChatIDStr, TelegramTopicID]]: A list of tuples containing slave channel UID and message thread ID
         """
         try:
-            return TopicAssoc.select(TopicAssoc.slave_uid, TopicAssoc.message_thread_id)\
-                .where(TopicAssoc.topic_chat_id == topic_chat_id).order_by(TopicAssoc.id.desc()).tuples()
+            query = TopicAssoc.select(TopicAssoc.slave_uid, TopicAssoc.message_thread_id)\
+                .where(TopicAssoc.topic_chat_id == topic_chat_id).order_by(TopicAssoc.id.desc())
+            return [(row.slave_uid, int(row.message_thread_id)) for row in query]
         except DoesNotExist:
             return None
         except AttributeError:
