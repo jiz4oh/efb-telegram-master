@@ -548,6 +548,11 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    def get_chat_info(self, *args, **kwargs):
+        return self.updater.bot.get_chat(*args, **kwargs)
+
+    @Decorators.retry_on_timeout
+    @Decorators.retry_on_chat_migration
     def create_forum_topic(self, *args, **kwargs):
         return self.updater.bot.create_forum_topic(*args, **kwargs)
 
