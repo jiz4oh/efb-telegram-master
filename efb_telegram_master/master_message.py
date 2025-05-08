@@ -402,6 +402,8 @@ class MasterMessageProcessor(LocaleMixin):
             else:
                 raise EFBMessageTypeNotSupported(self._("Message type {0} is not supported.").format(mtype.name))
 
+            if log_message:
+                self.db.add_or_update_message_log(m, update.effective_message)
             slave_msg = coordinator.send_message(m)
             if slave_msg and slave_msg.uid:
                 m.uid = slave_msg.uid
