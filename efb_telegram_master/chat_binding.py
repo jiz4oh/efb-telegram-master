@@ -225,6 +225,22 @@ class ChatBindingManager(LocaleMixin):
                 self.link_handler.conversations[storage_id] = Flags.LINK_EXEC
                 self.msg_storage[storage_id] = ChatListStorage([chat])
                 return self.build_link_action_message(chat, tg_chat_id, tg_msg_id)
+            if message.message_thread_id:
+                topic = message.message_thread_id
+                if topic:
+                    slave_origin_uid = self.db.get_topic_slave(
+                        topic_chat_id=TelegramChatID(message.chat_id),
+                        message_thread_id=topic
+                    )
+                    if slave_origin_uid:
+                        channel_id, chat_id, _ = utils.chat_id_str_to_id(slave_origin_uid)
+                        chat: ETMChatType = self.chat_manager.get_chat(channel_id, chat_id, build_dummy=True)
+                        tg_chat_id = TelegramChatID(message.chat_id)
+                        tg_msg_id = TelegramMessageID(message.reply_text(self._("Processing...")).message_id)
+                        storage_id: Tuple[TelegramChatID, TelegramMessageID] = (tg_chat_id, tg_msg_id)
+                        self.link_handler.conversations[storage_id] = Flags.LINK_EXEC
+                        self.msg_storage[storage_id] = ChatListStorage([chat])
+                        return self.build_link_action_message(chat, tg_chat_id, tg_msg_id)
 
         if message.chat.type != telegram.Chat.PRIVATE:
             links = self.db.get_chat_assoc(
@@ -569,15 +585,28 @@ class ChatBindingManager(LocaleMixin):
         msg = self.bot.send_message(tg_chat_to_link, text=txt)
 
         chat.link(self.channel.channel_id, ChatID(str(tg_chat_to_link)), self.channel.flag("multiple_slave_chats"))
-        try:
-            self.db.remove_topic_assoc(
-                topic_chat_id=self.channel.topic_group,
-                slave_uid=chat_uid,
-            )
-            #TODO delete or close the topic after link?
-        except Exception as e:
-            self.logger.warn("Error occurred while remove topic assoc.\nError: %s\n%s",
-                              repr(e), traceback.format_exc())
+        self.db.remove_topic_assoc(
+            slave_uid=chat_uid,
+        )
+
+        # chat_id = utils.chat_id_to_str(self.channel.channel_id, ChatID(str(tg_chat_to_link)))
+        # links = self.db.get_chat_assoc(master_uid=chat_id)
+        # if len(links) > 1 and self.channel.topic_group:
+        #     try:
+        #         topic: ForumTopic = self.bot.create_forum_topic(
+        #             chat_id=chat_id,
+        #             name=chat.chat_title
+        #         )
+        #         thread_id = topic.message_thread_id
+        #         self.db.add_topic_assoc(
+        #             topic_chat_id=chat_id,
+        #             message_thread_id=thread_id,
+        #             slave_uid=chat_uid,
+        #         )
+        #         return thread_id
+        #     except telegram.error.BadRequest as e:
+        #         self.logger.error('Failed to create topic, Reason: %s', e)
+        #         return None
 
         txt = self._("Chat {0} is now linked.").format(chat_display_name)
         self.bot.edit_message_text(text=txt, chat_id=msg.chat.id, message_id=msg.message_id)

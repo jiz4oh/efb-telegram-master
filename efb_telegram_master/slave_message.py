@@ -5,8 +5,10 @@ import itertools
 import logging
 import os
 import tempfile
+import threading
 import traceback
 import urllib.parse
+from collections import defaultdict
 from pathlib import Path
 from typing import Tuple, Optional, TYPE_CHECKING, List, IO, Union
 
@@ -34,7 +36,7 @@ from .constants import Emoji
 from .locale_mixin import LocaleMixin
 from .message import ETMMsg
 from .msg_type import get_msg_type
-from .utils import TelegramChatID, TelegramTopicThreadID, TelegramMessageID, OldMsgID
+from .utils import TelegramChatID, TelegramTopicID, TelegramMessageID, OldMsgID
 
 if TYPE_CHECKING:
     from . import TelegramChannel
@@ -53,6 +55,7 @@ class SlaveMessageProcessor(LocaleMixin):
         self.db: 'DatabaseManager' = channel.db
         self.chat_dest_cache: ChatDestinationCache = channel.chat_dest_cache
         self.chat_manager: ChatObjectCacheManager = channel.chat_manager
+        self._topic_creation_locks = defaultdict(threading.Lock)
 
     def is_silent(self, msg: Message) -> Optional[bool]:
         """Determine if a message shall be sent silently.
@@ -119,14 +122,28 @@ class SlaveMessageProcessor(LocaleMixin):
 
             self.dispatch_message(msg, msg_template, old_msg_id, tg_dest, thread_id, silent)
         except Exception as e:
-            self.logger.error("Error occurred while processing message from slave channel.\nMessage: %s\n%s\n%s",
+            if isinstance(e, telegram.error.BadRequest) and e.message:
+                if "Topic" in e.message:
+                    try:
+                        self.bot.reopen_forum_topic(
+                            chat_id=tg_dest,
+                            message_thread_id=thread_id
+                        )
+                    except telegram.error.BadRequest as e:
+                        self.logger.error('Failed to reopen topic, Reason: %s', e)
+                        self.db.remove_topic_assoc(
+                            topic_chat_id=tg_dest,
+                            message_thread_id=thread_id,
+                        )
+            else:
+                self.logger.error("Error occurred while processing message from slave channel.\nMessage: %s\n%s\n%s",
                               repr(msg), repr(e), traceback.format_exc())
         return msg
 
     def dispatch_message(self, msg: Message, msg_template: str,
                          old_msg_id: Optional[OldMsgID],
                          tg_dest: TelegramChatID,
-                         thread_id: Optional[TelegramTopicThreadID],
+                         thread_id: Optional[TelegramTopicID],
                          silent: bool = False):
         """Dispatch with header, destination and Telegram message ID and destinations."""
 
@@ -230,7 +247,7 @@ class SlaveMessageProcessor(LocaleMixin):
         self.db.add_or_update_message_log(etm_msg, tg_msg, old_msg_id)
         # self.logger.debug("[%s] Message inserted/updated to the database.", xid)
 
-    def get_slave_msg_dest(self, msg: Message) -> Tuple[str, Tuple[Optional[TelegramChatID], Optional[TelegramTopicThreadID]]]:
+    def get_slave_msg_dest(self, msg: Message) -> Tuple[str, Tuple[Optional[TelegramChatID], Optional[TelegramTopicID]]]:
         """Get the Telegram destination of a message with its header.
 
         Returns:
@@ -246,7 +263,7 @@ class SlaveMessageProcessor(LocaleMixin):
         tg_chats = self.db.get_chat_assoc(slave_uid=chat_uid)
         tg_chat = None
         tg_dest: Optional[TelegramChatID] = None
-        thread_id: Optional[TelegramTopicThreadID] = None
+        thread_id: Optional[TelegramTopicID] = None
 
         if tg_chats:
             tg_chat = tg_chats[0]
@@ -262,47 +279,39 @@ class SlaveMessageProcessor(LocaleMixin):
 
         # Generate chat text template & Decide type target
         tg_dest = TelegramChatID(self.channel.config['admins'][0])
-
-        if tg_chat:  # if this chat is linked
+        
+        if tg_chat:
             tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]))
-        elif not isinstance(chat, SystemChat) and self.channel.topic_group:
-            thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid, topic_chat_id=self.channel.topic_group)
-            if thread_id:
-                try:
-                    self.bot.reopen_forum_topic(
-                        chat_id=self.channel.topic_group,
-                        message_thread_id=thread_id
-                    )
-                    tg_dest = self.channel.topic_group
-                except telegram.error.BadRequest as e:
-                    # expected behavior
-                    if e.message == "Topic_not_modified":
-                        tg_dest = self.channel.topic_group
-                        pass
-                    else:
-                        self.logger.error('Failed to reopen topic, Reason: %s', e)
-                        thread_id = None
-            if not thread_id:
-                try:
-                    topic: ForumTopic = self.bot.create_forum_topic(
-                        chat_id=self.channel.topic_group,
-                        name=chat.chat_title
-                    )
-                    tg_dest = self.channel.topic_group
-                    thread_id = topic.message_thread_id
-                    self.db.remove_topic_assoc(
-                        topic_chat_id=self.channel.topic_group,
-                        slave_uid=chat_uid,
-                    )
-                    self.db.add_topic_assoc(
-                        topic_chat_id=self.channel.topic_group,
-                        message_thread_id=thread_id,
-                        slave_uid=chat_uid,
-                    )
-                except telegram.error.BadRequest as e:
-                    self.logger.error('Failed to create topic, Reason: %s', e)
-        else:
+        if self.channel.topic_group:
+            if not isinstance(chat, SystemChat):
+                tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
+                master_chat_info = self.bot.get_chat_info(tg_dest)
+                if master_chat_info.is_forum:
+                    thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
+                    if not thread_id:
+                        with self._topic_creation_locks[tg_dest]:
+                            thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
+                            if not thread_id:
+                                try:
+                                    topic: ForumTopic = self.bot.create_forum_topic(
+                                        chat_id=tg_dest,
+                                        name=chat.chat_title
+                                    )
+                                    thread_id = topic.message_thread_id
+                                    self.db.add_topic_assoc(
+                                        topic_chat_id=tg_dest,
+                                        message_thread_id=thread_id,
+                                        slave_uid=chat_uid,
+                                    )
+                                except telegram.error.BadRequest as e:
+                                    self.logger.info('Failed to create topic, Reason: %s', e)
+                                    tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
+                                    thread_id = None
+
+        if not tg_chat:
             singly_linked = False
+        if thread_id:
+            singly_linked = True
 
         msg_template = self.generate_message_template(msg, singly_linked)
         self.logger.debug("[%s] Message is sent to Telegram chat %s, with header \"%s\".",
@@ -340,7 +349,7 @@ class SlaveMessageProcessor(LocaleMixin):
         return text
 
     def slave_message_text(self, msg: Message, tg_dest: TelegramChatID,
-                           thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                           thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                            old_msg_id: OldMsgID = None,
                            target_msg_id: Optional[TelegramMessageID] = None,
                            reply_markup: Optional[ReplyMarkup] = None,
@@ -386,7 +395,7 @@ class SlaveMessageProcessor(LocaleMixin):
         return tg_msg
 
     def slave_message_link(self, msg: Message, tg_dest: TelegramChatID,
-                           thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                           thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                            old_msg_id: OldMsgID = None,
                            target_msg_id: Optional[TelegramMessageID] = None,
                            reply_markup: Optional[ReplyMarkup] = None,
@@ -431,7 +440,7 @@ class SlaveMessageProcessor(LocaleMixin):
     """Threshold of aspect ratio (longer side to shorter side) to send as file, used alone."""
 
     def slave_message_image(self, msg: Message, tg_dest: TelegramChatID,
-                            thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                            thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                             old_msg_id: OldMsgID = None,
                             target_msg_id: Optional[TelegramMessageID] = None,
                             reply_markup: Optional[ReplyMarkup] = None,
@@ -562,7 +571,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 msg.file.close()
 
     def slave_message_animation(self, msg: Message, tg_dest: TelegramChatID,
-                                thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                                thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                                 old_msg_id: OldMsgID = None,
                                 target_msg_id: Optional[TelegramMessageID] = None,
                                 reply_markup: Optional[ReplyMarkup] = None,
@@ -623,7 +632,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 msg.file.close()
 
     def slave_message_sticker(self, msg: Message, tg_dest: TelegramChatID,
-                              thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                              thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                               old_msg_id: OldMsgID = None,
                               target_msg_id: Optional[TelegramMessageID] = None,
                               reply_markup: Optional[InlineKeyboardMarkup] = None,
@@ -725,7 +734,7 @@ class SlaveMessageProcessor(LocaleMixin):
 
 
     def slave_message_file(self, msg: Message, tg_dest: TelegramChatID,
-                           thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                           thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                            old_msg_id: OldMsgID = None,
                            target_msg_id: Optional[TelegramMessageID] = None,
                            reply_markup: Optional[ReplyMarkup] = None,
@@ -798,7 +807,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 msg.file.close()
 
     def slave_message_voice(self, msg: Message, tg_dest: TelegramChatID,
-                            thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                            thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                             old_msg_id: OldMsgID = None,
                             target_msg_id: Optional[TelegramMessageID] = None,
                             reply_markup: Optional[ReplyMarkup] = None,
@@ -866,7 +875,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 msg.file.close()
 
     def slave_message_location(self, msg: Message, tg_dest: TelegramChatID,
-                               thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                               thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                                old_msg_id: OldMsgID = None,
                                target_msg_id: Optional[TelegramMessageID] = None,
                                reply_markup: Optional[InlineKeyboardMarkup] = None,
@@ -898,7 +907,7 @@ class SlaveMessageProcessor(LocaleMixin):
                                       disable_notification=silent)
 
     def slave_message_video(self, msg: Message, tg_dest: TelegramChatID,
-                            thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                            thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                             old_msg_id: OldMsgID = None,
                             target_msg_id: Optional[TelegramMessageID] = None,
                             reply_markup: Optional[ReplyMarkup] = None,
@@ -956,7 +965,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 msg.file.close()
 
     def slave_message_unsupported(self, msg: Message, tg_dest: TelegramChatID,
-                                  thread_id: Optional[TelegramTopicThreadID], msg_template: str, reactions: str,
+                                  thread_id: Optional[TelegramTopicID], msg_template: str, reactions: str,
                                   old_msg_id: OldMsgID = None,
                                   target_msg_id: Optional[TelegramMessageID] = None,
                                   reply_markup: Optional[ReplyMarkup] = None,
@@ -989,7 +998,7 @@ class SlaveMessageProcessor(LocaleMixin):
         return tg_msg
 
     def slave_message_status(self, msg: Message, tg_dest: TelegramChatID,
-                             thread_id: Optional[TelegramTopicThreadID]):
+                             thread_id: Optional[TelegramTopicID]):
         attributes = msg.attributes
         assert isinstance(attributes, StatusAttribute)
         if attributes.status_type is StatusAttribute.Types.TYPING:
@@ -1037,13 +1046,9 @@ class SlaveMessageProcessor(LocaleMixin):
                 except TelegramError as e:
                     self.logger.warning("Failed to delete message %s.%s: %s. Sending notification instead.", *old_msg_id, e)
                     pass
-                thread_id = None
-                if old_msg.master_message_thread_id:
-                    thread_id = TelegramTopicThreadID(old_msg.master_message_thread_id)
                 self.bot.send_message(chat_id=old_msg_id[0],
                                       text=self._("Message is removed in remote chat."),
                                       reply_to_message_id=old_msg_id[1],
-                                      message_thread_id=thread_id, # Send notification in the correct thread
                                       disable_notification=True) # Probably silent notification
             else:
                 self.logger.info('Was supposed to delete a message, '
@@ -1080,12 +1085,9 @@ class SlaveMessageProcessor(LocaleMixin):
         msg_template, _ = self.get_slave_msg_dest(old_msg)
         effective_msg = old_msg_db.master_msg_id_alt or old_msg_db.master_msg_id
         chat_id, msg_id = utils.message_id_str_to_id(effective_msg)
-        thread_id = None
-        if old_msg.master_message_thread_id:
-            thread_id = TelegramTopicThreadID(old_msg.master_message_thread_id)
 
         # Go through the ordinary update process
-        self.dispatch_message(old_msg, msg_template, old_msg_id=(chat_id, msg_id), tg_dest=chat_id, thread_id=thread_id)
+        self.dispatch_message(old_msg, msg_template, old_msg_id=(chat_id, msg_id), tg_dest=chat_id)
 
     def generate_message_template(self, msg: Message, singly_linked: bool) -> str:
         msg_prefix = ""  # For group member name
