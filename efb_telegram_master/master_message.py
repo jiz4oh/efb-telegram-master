@@ -218,7 +218,7 @@ class MasterMessageProcessor(LocaleMixin):
         if destination is None:
             self.logger.debug("[%s] Destination is not found for this message", mid)
             candidates = (
-                 self.db.get_recent_slave_chats(TelegramChatID(message.chat.id), limit=5) and
+                 self.db.get_recent_slave_chats(TelegramChatID(message.chat.id), limit=5) or
                  self.db.get_chat_assoc(master_uid=utils.chat_id_to_str(self.channel_id, ChatID(str(message.chat.id))))[:5]
             )
             if candidates:
