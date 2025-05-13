@@ -178,7 +178,7 @@ class MasterMessageProcessor(LocaleMixin):
                             self.logger.debug("[%s] Chat %s is singly-linked to %s in topic %s", mid, message.chat, dest, topic_id)
                             destination = dest
                             quote = message.reply_to_message.message_id != message.reply_to_message.message_thread_id
-                            if quote:
+                            if not quote:
                                 message.reply_to_message = None
                             break
                     if destination is None:
