@@ -173,12 +173,12 @@ class MasterMessageProcessor(LocaleMixin):
                 topic_destinations = self.db.get_topic_slaves(topic_chat_id=message.chat.id)
                 thread_id = message.message_thread_id
                 if thread_id:
-                    for (destination, topic_id) in topic_destinations:
+                    for (dest, topic_id) in topic_destinations:
                         if topic_id == thread_id:
-                            self.logger.debug("[%s] Chat %s is singly-linked to %s in topic %s", mid, message.chat, destination, topic_id)
-                            destination = destination
+                            self.logger.debug("[%s] Chat %s is singly-linked to %s in topic %s", mid, message.chat, dest, topic_id)
+                            destination = dest
                             quote = message.reply_to_message.message_id != message.reply_to_message.message_thread_id
-                            if quote:
+                            if not quote:
                                 message.reply_to_message = None
                             break
                     if destination is None:
