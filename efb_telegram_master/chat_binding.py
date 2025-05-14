@@ -5,6 +5,7 @@ import io
 import logging
 import re
 import urllib.parse
+import threading
 from contextlib import suppress
 from typing import Tuple, Dict, Optional, List, TYPE_CHECKING, IO, Union, Pattern
 
@@ -27,7 +28,7 @@ from .constants import Emoji, Flags
 from .locale_mixin import LocaleMixin
 from .message import ETMMsg
 from .msg_type import TGMsgType
-from .utils import EFBChannelChatIDStr, TelegramChatID, TelegramMessageID, TgChatMsgIDStr
+from .utils import EFBChannelChatIDStr, TelegramChatID, TelegramMessageID, TgChatMsgIDStr, TelegramTopicID
 
 if TYPE_CHECKING:
     from . import TelegramChannel
@@ -97,6 +98,7 @@ class ChatBindingManager(LocaleMixin):
         self.bot: 'TelegramBotManager' = channel.bot_manager
         self.db: 'DatabaseManager' = channel.db
         self.chat_manager: 'ChatObjectCacheManager' = channel.chat_manager
+        self._topic_mutex = threading.Lock()
 
         # Link handler
         non_edit_filter = Filters.update.message | Filters.update.channel_post
@@ -575,36 +577,20 @@ class ChatBindingManager(LocaleMixin):
         # Use channel ID if command is forwarded from a channel.
         forwarded_chat = update.effective_message.forward_from_chat
         if forwarded_chat and forwarded_chat.type == telegram.Chat.CHANNEL:
-            tg_chat_to_link = forwarded_chat.id
+            tg_chat_to_link = forwarded_chat
         else:
-            tg_chat_to_link = update.effective_chat.id
+            tg_chat_to_link = update.effective_chat
 
         txt = self._('Trying to link chat {0}...').format(chat_display_name)
-        msg = self.bot.send_message(tg_chat_to_link, text=txt)
+        msg = self.bot.send_message(tg_chat_to_link.id, text=txt)
 
-        chat.link(self.channel.channel_id, ChatID(str(tg_chat_to_link)), self.channel.flag("multiple_slave_chats"))
+        chat.link(self.channel.channel_id, ChatID(str(tg_chat_to_link.id)), self.channel.flag("multiple_slave_chats"))
         self.db.remove_topic_assoc(
             slave_uid=chat_uid,
         )
 
-        # chat_id = utils.chat_id_to_str(self.channel.channel_id, ChatID(str(tg_chat_to_link)))
-        # links = self.db.get_chat_assoc(master_uid=chat_id)
-        # if len(links) > 1 and self.channel.topic_group:
-        #     try:
-        #         topic: ForumTopic = self.bot.create_forum_topic(
-        #             chat_id=chat_id,
-        #             name=chat.chat_title
-        #         )
-        #         thread_id = topic.message_thread_id
-        #         self.db.add_topic_assoc(
-        #             topic_chat_id=chat_id,
-        #             message_thread_id=thread_id,
-        #             slave_uid=chat_uid,
-        #         )
-        #         return thread_id
-        #     except telegram.error.BadRequest as e:
-        #         self.logger.error('Failed to create topic, Reason: %s', e)
-        #         return None
+        if tg_chat_to_link.is_forum:
+            self.create_topic(slave_uid=chat_uid, telegram_chat_id=TelegramChatID(tg_chat_to_link.id))
 
         txt = self._("Chat {0} is now linked.").format(chat_display_name)
         self.bot.edit_message_text(text=txt, chat_id=msg.chat.id, message_id=msg.message_id)
@@ -1042,6 +1028,29 @@ class ChatBindingManager(LocaleMixin):
             self.logger.exception("Unknown error caught when querying chat.")
             return self.bot.reply_error(update, self._('Error occurred while update chat details. \n'
                                                        '{0}'.format(e)))
+
+    def create_topic(self, slave_uid: EFBChannelChatIDStr, telegram_chat_id: TelegramChatID) -> TelegramTopicID:
+        thread_id = self.db.get_topic_thread_id(slave_uid=slave_uid, topic_chat_id=telegram_chat_id)
+        if not thread_id:
+            with self._topic_mutex:
+                thread_id = self.db.get_topic_thread_id(slave_uid=slave_uid, topic_chat_id=telegram_chat_id)
+                if not thread_id:
+                    channel_id, chat_id, _ = utils.chat_id_str_to_id(slave_uid)
+                    chat: ETMChatType = self.chat_manager.get_chat(channel_id, chat_id, build_dummy=True)
+                    try:
+                        topic = self.bot.create_forum_topic(
+                            chat_id=telegram_chat_id,
+                            name=chat.chat_title
+                        )
+                        thread_id = topic.message_thread_id
+                        self.db.add_topic_assoc(
+                            topic_chat_id=telegram_chat_id,
+                            message_thread_id=topic.message_thread_id,
+                            slave_uid=slave_uid,
+                        )
+                    except Exception as e:
+                        self.logger.info('Failed to create topic, Reason: %s', e)
+        return thread_id
 
     def chat_migration(self, update: Update, context: CallbackContext):
         """Triggered by any message update with either

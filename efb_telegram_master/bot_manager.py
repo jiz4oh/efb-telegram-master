@@ -10,7 +10,7 @@ from typing import List, TYPE_CHECKING, Callable
 import telegram.constants
 import telegram.error
 from retrying import retry
-from telegram import Update, InputFile, User, File
+from telegram import Update, InputFile, User, File, ForumTopic
 from telegram.ext import CallbackContext, Filters, MessageHandler, Updater, Dispatcher
 
 from .locale_handler import LocaleHandler
@@ -553,7 +553,7 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
-    def create_forum_topic(self, *args, **kwargs):
+    def create_forum_topic(self, *args, **kwargs) -> ForumTopic:
         return self.updater.bot.create_forum_topic(*args, **kwargs)
 
     @Decorators.retry_on_timeout
