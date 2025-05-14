@@ -215,7 +215,11 @@ class TelegramChannel(MasterChannel):
         else:  # Talking to the bot.
             msg = self.info_general()
 
-        update.effective_message.reply_text(msg)
+        if len(msg) > 4095:
+            for x in range(0, len(msg), 4095):
+                update.effective_message.reply_text(msg[x:x+4095])
+        else:
+            update.effective_message.reply_text(msg)
 
     def info_topic(self, update: Update):
         """Generate string for chat linking info of a topic."""
