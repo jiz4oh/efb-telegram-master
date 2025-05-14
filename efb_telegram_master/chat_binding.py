@@ -1029,6 +1029,15 @@ class ChatBindingManager(LocaleMixin):
             return self.bot.reply_error(update, self._('Error occurred while update chat details. \n'
                                                        '{0}'.format(e)))
 
+    def topic_migration(self, update: Update, context: CallbackContext):
+        assert isinstance(update, Update)
+        assert update.effective_message
+
+        message = update.effective_message
+        chats = self.db.get_chat_assoc(master_uid=utils.chat_id_to_str(self.channel.channel_id, ChatID(str(message.chat.id))))
+        for i in chats:
+            self.create_topic(slave_uid=i, telegram_chat_id=TelegramChatID(message.chat.id))
+
     def create_topic(self, slave_uid: EFBChannelChatIDStr, telegram_chat_id: TelegramChatID) -> TelegramTopicID:
         thread_id = self.db.get_topic_thread_id(slave_uid=slave_uid, topic_chat_id=telegram_chat_id)
         if not thread_id:
@@ -1067,6 +1076,8 @@ class ChatBindingManager(LocaleMixin):
         elif message.migrate_to_chat_id is not None:
             from_id = ChatID(str(message.chat.id))
             to_id = ChatID(str(message.migrate_to_chat_id))
+            if str(message.migrate_to_chat_id).startswith('-100') and self.bot.get_chat_info(message.migrate_to_chat_id).is_forum:
+                self.topic_migration(update, context)
         else:
             # Per ptb filter specs, this part of code should not be reached.
             return
