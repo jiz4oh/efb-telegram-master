@@ -558,6 +558,11 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    def edit_forum_topic(self, *args, **kwargs):
+        return self.updater.bot.edit_forum_topic(*args, **kwargs)
+
+    @Decorators.retry_on_timeout
+    @Decorators.retry_on_chat_migration
     def reopen_forum_topic(self, *args, **kwargs) -> bool:
         return self.updater.bot.reopen_forum_topic(*args, **kwargs)
 

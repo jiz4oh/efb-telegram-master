@@ -905,13 +905,18 @@ class ChatBindingManager(LocaleMixin):
         if update.effective_chat.type == telegram.Chat.PRIVATE:
             return self.bot.reply_error(update, self._('Send /update_info to a group where this bot is a group admin '
                                                        'to update group title, description and profile picture.'))
+
+        if update.effective_chat.is_forum:
+            return self.update_thread_info(update, context)
+
         forwarded_from_chat = update.effective_message.forward_from_chat
         if forwarded_from_chat and forwarded_from_chat.type == telegram.Chat.CHANNEL:
-            tg_chat = forwarded_from_chat.id
+            tg_chat = forwarded_from_chat
         else:
-            tg_chat = update.effective_chat.id
+            tg_chat = update.effective_chat
+
         chats = self.db.get_chat_assoc(master_uid=utils.chat_id_to_str(channel=self.channel,
-                                                                       chat_uid=ChatID(str(tg_chat))))
+                                                                       chat_uid=ChatID(str(tg_chat.id))))
         if len(chats) != 1:
             return self.bot.reply_error(update, self.ngettext('This only works in a group linked with one chat. '
                                                               'Currently {0} chat linked to this group.',
@@ -929,7 +934,7 @@ class ChatBindingManager(LocaleMixin):
         try:
             chat = self.chat_manager.update_chat_obj(channel.get_chat(chat_uid), full_update=True)
 
-            self.bot.set_chat_title(tg_chat, self.truncate_ellipsis(chat.chat_title, self.MAX_LEN_CHAT_TITLE))
+            self.bot.set_chat_title(tg_chat.id, self.truncate_ellipsis(chat.chat_title, self.MAX_LEN_CHAT_TITLE))
 
             # Update remote group members list to Telegram group description if available
             desc = chat.description
@@ -944,7 +949,7 @@ class ChatBindingManager(LocaleMixin):
             if desc:
                 try:
                     self.bot.set_chat_description(
-                        tg_chat, self.truncate_ellipsis(desc, self.MAX_LEN_CHAT_DESC))
+                        tg_chat.id, self.truncate_ellipsis(desc, self.MAX_LEN_CHAT_DESC))
                 except BadRequest as e:
                     if "Chat description is not modified" in e.message:
                         pass
@@ -969,7 +974,7 @@ class ChatBindingManager(LocaleMixin):
 
             picture.seek(0)
 
-            self.bot.set_chat_photo(tg_chat, pic_resized or picture)
+            self.bot.set_chat_photo(tg_chat.id, pic_resized or picture)
             update.effective_message.reply_text(self._('Chat details updated.'))
         except EFBChatNotFound:
             self.logger.exception("Chat linked (%s) is not found in the slave channel "
@@ -993,6 +998,50 @@ class ChatBindingManager(LocaleMixin):
                 picture.close()
             if pic_resized and getattr(pic_resized, 'close', None):
                 pic_resized.close()
+
+    def update_thread_info(self, update: Update, context: CallbackContext):
+        assert isinstance(update, Update)
+        assert update.effective_message
+        assert update.effective_chat
+
+        try:
+            thread_id = update.effective_message.message_thread_id
+            if thread_id:
+                slave_origin_uid = self.db.get_topic_slave(
+                    topic_chat_id=TelegramChatID(update.effective_message.chat_id),
+                    message_thread_id=thread_id
+                )
+                if not slave_origin_uid:
+                    return self.bot.reply_error(update, self._("This chat is not managed by this bot. Update failed"))
+                channel_id, chat_id, _ = utils.chat_id_str_to_id(slave_origin_uid)
+                etm_chat: ETMChatType = self.chat_manager.get_chat(channel_id, chat_id, build_dummy=True)
+                self.bot.edit_forum_topic(
+                    chat_id=update.effective_chat.id, 
+                    message_thread_id=thread_id, 
+                    name=self.truncate_ellipsis(etm_chat.chat_title, self.MAX_LEN_CHAT_TITLE),
+                    icon_custom_emoji_id=""  # param required by telegram
+                )
+                update.effective_message.reply_text(self._('Chat details updated.'))
+        except EFBChatNotFound:
+            self.logger.exception("Chat linked (%s) is not found in the slave channel "
+                                  "(%s).", channel_id, chat_uid)
+            return self.bot.reply_error(update, self._("Chat linked ({chat_uid}) is not found in the slave channel "
+                                                       "({channel_name}, {channel_id}).")
+                                        .format(channel_name=channel.channel_name, channel_id=channel_id,
+                                                chat_uid=chat_uid))
+        except TelegramError as e:
+            if e.message == "Topic_not_modified":
+                update.effective_message.reply_text(self._('Chat details updated.'))
+            else:
+                self.logger.exception("Error occurred while update chat details.")
+                return self.bot.reply_error(update, self._('Error occurred while update chat details.\n'
+                                                        '{0}'.format(e.message)))
+        except EFBOperationNotSupported:
+            return self.bot.reply_error(update, self._('No profile picture provided from this chat.'))
+        except Exception as e:
+            self.logger.exception("Unknown error caught when querying chat.")
+            return self.bot.reply_error(update, self._('Error occurred while update chat details. \n'
+                                                       '{0}'.format(e)))
 
     def chat_migration(self, update: Update, context: CallbackContext):
         """Triggered by any message update with either
