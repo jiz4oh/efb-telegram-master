@@ -150,6 +150,7 @@ class ChatBindingManager(LocaleMixin):
 
         # Update group title and profile picture
         self.bot.dispatcher.add_handler(CommandHandler('update_info', self.update_group_info))
+        self.bot.dispatcher.add_handler(CommandHandler('init_topics', self.topic_migration))
 
         self.bot.dispatcher.add_handler(
             MessageHandler(Filters.status_update.migrate, self.chat_migration))
@@ -590,7 +591,15 @@ class ChatBindingManager(LocaleMixin):
         )
 
         if tg_chat_to_link.is_forum:
-            self.create_topic(slave_uid=chat_uid, telegram_chat_id=TelegramChatID(tg_chat_to_link.id))
+            thread_id = self.create_topic(slave_uid=chat_uid, telegram_chat_id=TelegramChatID(tg_chat_to_link.id))
+            if not thread_id:
+                msg.reply_text(
+                    self._(
+                    "Failed to create topic for {name} in the group.\n"
+                    "Please make sure the bot has the right.\n"
+                    "You can send /init_topics to create again."
+                    ).format(name=chat_display_name),
+                    reply_to_message_id=msg.message_id)
 
         txt = self._("Chat {0} is now linked.").format(chat_display_name)
         self.bot.edit_message_text(text=txt, chat_id=msg.chat.id, message_id=msg.message_id)
