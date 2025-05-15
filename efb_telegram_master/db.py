@@ -394,36 +394,42 @@ class DatabaseManager:
         return TopicAssoc.create(topic_chat_id=topic_chat_id, message_thread_id=message_thread_id, slave_uid=slave_uid)
 
     @staticmethod
-    def get_topic_thread_id(slave_uid: EFBChannelChatIDStr) -> TelegramTopicID:
+    def get_topic_thread_id(slave_uid: EFBChannelChatIDStr, topic_chat_id: TelegramChatID=None) -> Optional[TelegramTopicID]:
         """
         Get topic association (topic link) information.
         Only one parameter is to be provided.
 
         Args:
+            topic_chat_id (TelegramChatID): The topic UID
             slave_uid (EFBChannelChatIDStr): Slave channel UID ("%(channel_id)s.%(chat_id)s")
 
         Returns:
             The message thread_id
         """
         try:
-            assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
-                .where(TopicAssoc.slave_uid == slave_uid)\
-                .order_by(TopicAssoc.id.desc()).first()
+            if topic_chat_id:
+                assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
+                    .where(TopicAssoc.slave_uid == slave_uid, TopicAssoc.topic_chat_id == topic_chat_id)\
+                    .order_by(TopicAssoc.id.desc()).first()
+            else:
+                assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
+                    .where(TopicAssoc.slave_uid == slave_uid)\
+                    .order_by(TopicAssoc.id.desc()).first()
             if assoc:
-                return int(assoc.message_thread_id)
+                return TelegramTopicID(int(assoc.message_thread_id))
         except DoesNotExist:
             return None
 
     @staticmethod
-    def get_topic_slave(topic_chat_id: TelegramTopicID,
-                        message_thread_id: Optional[EFBChannelChatIDStr] = None,
+    def get_topic_slave(topic_chat_id: TelegramChatID,
+                        message_thread_id: Optional[TelegramTopicID] = None,
                         ) -> Optional[EFBChannelChatIDStr]:
         """
         Get topic association (topic link) information.
         Only one parameter is to be provided.
 
         Args:
-            topic_chat_id (TelegramTopicID): The topic UID
+            topic_chat_id (TelegramChatID): The topic chat UID
             message_thread_id (TelegramTopicID): The message thread ID
 
         Returns:

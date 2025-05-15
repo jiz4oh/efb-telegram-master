@@ -5,6 +5,7 @@ import io
 import logging
 import re
 import urllib.parse
+import threading
 from contextlib import suppress
 from typing import Tuple, Dict, Optional, List, TYPE_CHECKING, IO, Union, Pattern
 
@@ -27,7 +28,7 @@ from .constants import Emoji, Flags
 from .locale_mixin import LocaleMixin
 from .message import ETMMsg
 from .msg_type import TGMsgType
-from .utils import EFBChannelChatIDStr, TelegramChatID, TelegramMessageID, TgChatMsgIDStr
+from .utils import EFBChannelChatIDStr, TelegramChatID, TelegramMessageID, TgChatMsgIDStr, TelegramTopicID
 
 if TYPE_CHECKING:
     from . import TelegramChannel
@@ -97,6 +98,7 @@ class ChatBindingManager(LocaleMixin):
         self.bot: 'TelegramBotManager' = channel.bot_manager
         self.db: 'DatabaseManager' = channel.db
         self.chat_manager: 'ChatObjectCacheManager' = channel.chat_manager
+        self._topic_mutex = threading.Lock()
 
         # Link handler
         non_edit_filter = Filters.update.message | Filters.update.channel_post
@@ -148,6 +150,7 @@ class ChatBindingManager(LocaleMixin):
 
         # Update group title and profile picture
         self.bot.dispatcher.add_handler(CommandHandler('update_info', self.update_group_info))
+        self.bot.dispatcher.add_handler(CommandHandler('init_topics', self.topic_migration))
 
         self.bot.dispatcher.add_handler(
             MessageHandler(Filters.status_update.migrate, self.chat_migration))
@@ -577,36 +580,28 @@ class ChatBindingManager(LocaleMixin):
         # Use channel ID if command is forwarded from a channel.
         forwarded_chat = update.effective_message.forward_from_chat
         if forwarded_chat and forwarded_chat.type == telegram.Chat.CHANNEL:
-            tg_chat_to_link = forwarded_chat.id
+            tg_chat_to_link = forwarded_chat
         else:
-            tg_chat_to_link = update.effective_chat.id
+            tg_chat_to_link = update.effective_chat
 
         txt = self._('Trying to link chat {0}...').format(chat_display_name)
-        msg = self.bot.send_message(tg_chat_to_link, text=txt)
+        msg = self.bot.send_message(tg_chat_to_link.id, text=txt)
 
-        chat.link(self.channel.channel_id, ChatID(str(tg_chat_to_link)), self.channel.flag("multiple_slave_chats"))
+        chat.link(self.channel.channel_id, ChatID(str(tg_chat_to_link.id)), self.channel.flag("multiple_slave_chats"))
         self.db.remove_topic_assoc(
             slave_uid=chat_uid,
         )
 
-        # chat_id = utils.chat_id_to_str(self.channel.channel_id, ChatID(str(tg_chat_to_link)))
-        # links = self.db.get_chat_assoc(master_uid=chat_id)
-        # if len(links) > 1 and self.channel.topic_group:
-        #     try:
-        #         topic: ForumTopic = self.bot.create_forum_topic(
-        #             chat_id=chat_id,
-        #             name=chat.chat_title
-        #         )
-        #         thread_id = topic.message_thread_id
-        #         self.db.add_topic_assoc(
-        #             topic_chat_id=chat_id,
-        #             message_thread_id=thread_id,
-        #             slave_uid=chat_uid,
-        #         )
-        #         return thread_id
-        #     except telegram.error.BadRequest as e:
-        #         self.logger.error('Failed to create topic, Reason: %s', e)
-        #         return None
+        if tg_chat_to_link.is_forum:
+            thread_id = self.create_topic(slave_uid=chat_uid, telegram_chat_id=TelegramChatID(tg_chat_to_link.id))
+            if not thread_id:
+                msg.reply_text(
+                    self._(
+                    "Failed to create topic for {name} in the group.\n"
+                    "Please make sure the bot has the right.\n"
+                    "You can send /init_topics to create again."
+                    ).format(name=chat_display_name),
+                    reply_to_message_id=msg.message_id)
 
         txt = self._("Chat {0} is now linked.").format(chat_display_name)
         self.bot.edit_message_text(text=txt, chat_id=msg.chat.id, message_id=msg.message_id)
@@ -907,13 +902,18 @@ class ChatBindingManager(LocaleMixin):
         if update.effective_chat.type == telegram.Chat.PRIVATE:
             return self.bot.reply_error(update, self._('Send /update_info to a group where this bot is a group admin '
                                                        'to update group title, description and profile picture.'))
+
+        if update.effective_chat.is_forum:
+            return self.update_thread_info(update, context)
+
         forwarded_from_chat = update.effective_message.forward_from_chat
         if forwarded_from_chat and forwarded_from_chat.type == telegram.Chat.CHANNEL:
-            tg_chat = forwarded_from_chat.id
+            tg_chat = forwarded_from_chat
         else:
-            tg_chat = update.effective_chat.id
+            tg_chat = update.effective_chat
+
         chats = self.db.get_chat_assoc(master_uid=utils.chat_id_to_str(channel=self.channel,
-                                                                       chat_uid=ChatID(str(tg_chat))))
+                                                                       chat_uid=ChatID(str(tg_chat.id))))
         if len(chats) != 1:
             return self.bot.reply_error(update, self.ngettext('This only works in a group linked with one chat. '
                                                               'Currently {0} chat linked to this group.',
@@ -931,7 +931,7 @@ class ChatBindingManager(LocaleMixin):
         try:
             chat = self.chat_manager.update_chat_obj(channel.get_chat(chat_uid), full_update=True)
 
-            self.bot.set_chat_title(tg_chat, self.truncate_ellipsis(chat.chat_title, self.MAX_LEN_CHAT_TITLE))
+            self.bot.set_chat_title(tg_chat.id, self.truncate_ellipsis(chat.chat_title, self.MAX_LEN_CHAT_TITLE))
 
             # Update remote group members list to Telegram group description if available
             desc = chat.description
@@ -946,7 +946,7 @@ class ChatBindingManager(LocaleMixin):
             if desc:
                 try:
                     self.bot.set_chat_description(
-                        tg_chat, self.truncate_ellipsis(desc, self.MAX_LEN_CHAT_DESC))
+                        tg_chat.id, self.truncate_ellipsis(desc, self.MAX_LEN_CHAT_DESC))
                 except BadRequest as e:
                     if "Chat description is not modified" in e.message:
                         pass
@@ -971,7 +971,7 @@ class ChatBindingManager(LocaleMixin):
 
             picture.seek(0)
 
-            self.bot.set_chat_photo(tg_chat, pic_resized or picture)
+            self.bot.set_chat_photo(tg_chat.id, pic_resized or picture)
             update.effective_message.reply_text(self._('Chat details updated.'))
         except EFBChatNotFound:
             self.logger.exception("Chat linked (%s) is not found in the slave channel "
@@ -1008,6 +1008,82 @@ class ChatBindingManager(LocaleMixin):
             chat_id = ChatID(str(message.chat.id))
             self.db.remove_chat_assoc(master_uid=utils.chat_id_to_str(self.channel.channel_id, chat_id))
 
+    def update_thread_info(self, update: Update, context: CallbackContext):
+        assert isinstance(update, Update)
+        assert update.effective_message
+        assert update.effective_chat
+
+        try:
+            thread_id = update.effective_message.message_thread_id
+            if thread_id:
+                slave_origin_uid = self.db.get_topic_slave(
+                    topic_chat_id=TelegramChatID(update.effective_message.chat_id),
+                    message_thread_id=thread_id
+                )
+                if not slave_origin_uid:
+                    return self.bot.reply_error(update, self._("This chat is not managed by this bot. Update failed"))
+                channel_id, chat_id, _ = utils.chat_id_str_to_id(slave_origin_uid)
+                etm_chat: ETMChatType = self.chat_manager.get_chat(channel_id, chat_id, build_dummy=True)
+                self.bot.edit_forum_topic(
+                    chat_id=update.effective_chat.id, 
+                    message_thread_id=thread_id, 
+                    name=self.truncate_ellipsis(etm_chat.chat_title, self.MAX_LEN_CHAT_TITLE),
+                    icon_custom_emoji_id=""  # param required by telegram
+                )
+                update.effective_message.reply_text(self._('Chat details updated.'))
+        except EFBChatNotFound:
+            self.logger.exception("Chat linked (%s) is not found in the slave channel "
+                                  "(%s).", channel_id, chat_uid)
+            return self.bot.reply_error(update, self._("Chat linked ({chat_uid}) is not found in the slave channel "
+                                                       "({channel_name}, {channel_id}).")
+                                        .format(channel_name=channel.channel_name, channel_id=channel_id,
+                                                chat_uid=chat_uid))
+        except TelegramError as e:
+            if e.message == "Topic_not_modified":
+                update.effective_message.reply_text(self._('Chat details updated.'))
+            else:
+                self.logger.exception("Error occurred while update chat details.")
+                return self.bot.reply_error(update, self._('Error occurred while update chat details.\n'
+                                                        '{0}'.format(e.message)))
+        except EFBOperationNotSupported:
+            return self.bot.reply_error(update, self._('No profile picture provided from this chat.'))
+        except Exception as e:
+            self.logger.exception("Unknown error caught when querying chat.")
+            return self.bot.reply_error(update, self._('Error occurred while update chat details. \n'
+                                                       '{0}'.format(e)))
+
+    def topic_migration(self, update: Update, context: CallbackContext):
+        assert isinstance(update, Update)
+        assert update.effective_message
+
+        message = update.effective_message
+        chats = self.db.get_chat_assoc(master_uid=utils.chat_id_to_str(self.channel.channel_id, ChatID(str(message.chat.id))))
+        for i in chats:
+            self.create_topic(slave_uid=i, telegram_chat_id=TelegramChatID(message.chat.id))
+
+    def create_topic(self, slave_uid: EFBChannelChatIDStr, telegram_chat_id: TelegramChatID) -> TelegramTopicID:
+        thread_id = self.db.get_topic_thread_id(slave_uid=slave_uid, topic_chat_id=telegram_chat_id)
+        if not thread_id:
+            with self._topic_mutex:
+                thread_id = self.db.get_topic_thread_id(slave_uid=slave_uid, topic_chat_id=telegram_chat_id)
+                if not thread_id:
+                    channel_id, chat_id, _ = utils.chat_id_str_to_id(slave_uid)
+                    chat: ETMChatType = self.chat_manager.get_chat(channel_id, chat_id, build_dummy=True)
+                    try:
+                        topic = self.bot.create_forum_topic(
+                            chat_id=telegram_chat_id,
+                            name=chat.chat_title
+                        )
+                        thread_id = topic.message_thread_id
+                        self.db.add_topic_assoc(
+                            topic_chat_id=telegram_chat_id,
+                            message_thread_id=topic.message_thread_id,
+                            slave_uid=slave_uid,
+                        )
+                    except Exception as e:
+                        self.logger.info('Failed to create topic, Reason: %s', e)
+        return thread_id
+
     def chat_migration(self, update: Update, context: CallbackContext):
         """Triggered by any message update with either
         ``migrate_from_chat_id`` or ``migrate_to_chat_id``
@@ -1023,6 +1099,8 @@ class ChatBindingManager(LocaleMixin):
         elif message.migrate_to_chat_id is not None:
             from_id = ChatID(str(message.chat.id))
             to_id = ChatID(str(message.migrate_to_chat_id))
+            if str(message.migrate_to_chat_id).startswith('-100') and self.bot.get_chat_info(message.migrate_to_chat_id).is_forum:
+                self.topic_migration(update, context)
         else:
             # Per ptb filter specs, this part of code should not be reached.
             return

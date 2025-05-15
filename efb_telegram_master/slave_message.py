@@ -20,7 +20,7 @@ import telegram.error
 import telegram.ext
 from PIL import Image
 from telegram import InputFile, ChatAction, InputMediaPhoto, InputMediaDocument, InputMediaVideo, InputMediaAnimation, \
-    InlineKeyboardMarkup, InlineKeyboardButton, ReplyMarkup, TelegramError, InputMedia, ForumTopic
+    InlineKeyboardMarkup, InlineKeyboardButton, ReplyMarkup, TelegramError, InputMedia
 
 from ehforwarderbot import Message, Status, coordinator
 from ehforwarderbot.chat import ChatNotificationState, SelfChatMember, GroupChat, PrivateChat, SystemChat, Chat
@@ -55,7 +55,6 @@ class SlaveMessageProcessor(LocaleMixin):
         self.db: 'DatabaseManager' = channel.db
         self.chat_dest_cache: ChatDestinationCache = channel.chat_dest_cache
         self.chat_manager: ChatObjectCacheManager = channel.chat_manager
-        self._topic_creation_locks = defaultdict(threading.Lock)
 
     def is_silent(self, msg: Message) -> Optional[bool]:
         """Determine if a message shall be sent silently.
@@ -287,26 +286,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
                 master_chat_info = self.bot.get_chat_info(tg_dest)
                 if master_chat_info.is_forum:
-                    thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
-                    if not thread_id:
-                        with self._topic_creation_locks[tg_dest]:
-                            thread_id = self.db.get_topic_thread_id(slave_uid=chat_uid)
-                            if not thread_id:
-                                try:
-                                    topic: ForumTopic = self.bot.create_forum_topic(
-                                        chat_id=tg_dest,
-                                        name=chat.chat_title
-                                    )
-                                    thread_id = topic.message_thread_id
-                                    self.db.add_topic_assoc(
-                                        topic_chat_id=tg_dest,
-                                        message_thread_id=thread_id,
-                                        slave_uid=chat_uid,
-                                    )
-                                except telegram.error.BadRequest as e:
-                                    self.logger.info('Failed to create topic, Reason: %s', e)
-                                    tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]) if tg_chat else self.channel.topic_group)
-                                    thread_id = None
+                    thread_id = self.channel.chat_binding.create_topic(slave_uid=chat_uid, telegram_chat_id=tg_dest)
 
         if not tg_chat:
             singly_linked = False
