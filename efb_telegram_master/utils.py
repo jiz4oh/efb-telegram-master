@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 
 TelegramChatID = NewType('TelegramChatID', int)
+TelegramTopicID = NewType('TelegramTopicID', int)
 TelegramMessageID = NewType('TelegramMessageID', int)
 TgChatMsgIDStr = NewType('TgChatMsgIDStr', str)
 EFBChannelChatIDStr = NewType('EFBChannelChatIDStr', str)
@@ -55,6 +56,7 @@ class ExperimentalFlagsManager(LocaleMixin):
         "api_base_url": None,
         "api_base_file_url": None,
         "local_tdlib_api": False,
+        "topic_group": None,
     }
 
     def __init__(self, channel: 'TelegramChannel'):

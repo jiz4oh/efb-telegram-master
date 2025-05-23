@@ -565,6 +565,10 @@ e.g.:
     Enable this option if the bot API is running in ``--local`` mode and
     is using the same file system with ETM.
 
+-   ``topic_group`` *(str)* [Default: ``null``]
+
+    Send message to this topic group, per chat per topic
+
 Network configuration: timeout tweaks
 -------------------------------------
 

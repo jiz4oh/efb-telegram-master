@@ -22,7 +22,7 @@ from .chat_object_cache import ChatObjectCacheManager
 from .message import ETMMsg
 from .msg_type import TGMsgType
 from .utils import TelegramChatID, EFBChannelChatIDStr, TgChatMsgIDStr, message_id_to_str, \
-    chat_id_to_str, OldMsgID, chat_id_str_to_id, TelegramMessageID
+    chat_id_to_str, OldMsgID, chat_id_str_to_id, TelegramMessageID, TelegramTopicID
 
 if TYPE_CHECKING:
     from . import TelegramChannel
@@ -54,6 +54,11 @@ class BaseModel(Model):
     class Meta:
         database = database
 
+
+class TopicAssoc(BaseModel):
+    topic_chat_id = TextField()
+    message_thread_id = TextField()
+    slave_uid = TextField()
 
 class ChatAssoc(BaseModel):
     master_uid = TextField()
@@ -184,7 +189,7 @@ class DatabaseManager:
         self.logger.debug("Database loaded.")
 
         self.logger.debug("Checking database migration...")
-        if not ChatAssoc.table_exists():
+        if not ChatAssoc.table_exists() or not TopicAssoc.table_exists():
             self._create()
         else:
             msg_log_columns = {i.name for i in database.get_columns("msglog")}
@@ -207,7 +212,7 @@ class DatabaseManager:
         """
         Initializing tables.
         """
-        database.create_tables([ChatAssoc, MsgLog, SlaveChatInfo])
+        database.create_tables([ChatAssoc, MsgLog, SlaveChatInfo, TopicAssoc])
 
     @staticmethod
     def _migrate(i: int):
@@ -373,6 +378,120 @@ class DatabaseManager:
                 return []
         except DoesNotExist:
             return []
+
+    def add_topic_assoc(self, topic_chat_id: TelegramChatID,
+                       message_thread_id: EFBChannelChatIDStr,
+                       slave_uid: EFBChannelChatIDStr, ):
+        """
+        Add topic associations (topic links).
+        One Master channel with many Slave channel.
+
+        Args:
+            topic_chat_id (TelegramChatID): The topic group chat ID
+            message_thread_id (EFBChannelChatIDStr): The topic thread ID
+            slave_uid (EFBChannelChatIDStr): Slave channel UID ("%(channel_id)s.%(chat_id)s")
+        """
+        return TopicAssoc.create(topic_chat_id=topic_chat_id, message_thread_id=message_thread_id, slave_uid=slave_uid)
+
+    @staticmethod
+    def get_topic_thread_id(slave_uid: EFBChannelChatIDStr, topic_chat_id: TelegramChatID=None) -> Optional[TelegramTopicID]:
+        """
+        Get topic association (topic link) information.
+        Only one parameter is to be provided.
+
+        Args:
+            topic_chat_id (TelegramChatID): The topic UID
+            slave_uid (EFBChannelChatIDStr): Slave channel UID ("%(channel_id)s.%(chat_id)s")
+
+        Returns:
+            The message thread_id
+        """
+        try:
+            if topic_chat_id:
+                assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
+                    .where(TopicAssoc.slave_uid == slave_uid, TopicAssoc.topic_chat_id == topic_chat_id)\
+                    .order_by(TopicAssoc.id.desc()).first()
+            else:
+                assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
+                    .where(TopicAssoc.slave_uid == slave_uid)\
+                    .order_by(TopicAssoc.id.desc()).first()
+            if assoc:
+                return TelegramTopicID(int(assoc.message_thread_id))
+        except DoesNotExist:
+            return None
+
+    @staticmethod
+    def get_topic_slave(topic_chat_id: TelegramChatID,
+                        message_thread_id: Optional[TelegramTopicID] = None,
+                        ) -> Optional[EFBChannelChatIDStr]:
+        """
+        Get topic association (topic link) information.
+        Only one parameter is to be provided.
+
+        Args:
+            topic_chat_id (TelegramChatID): The topic chat UID
+            message_thread_id (TelegramTopicID): The message thread ID
+
+        Returns:
+            Slave channel UID ("%(channel_id)s.%(chat_id)s")
+        """
+        try:
+            if message_thread_id:
+                return TopicAssoc.select(TopicAssoc.slave_uid)\
+                    .where(TopicAssoc.message_thread_id == message_thread_id, TopicAssoc.topic_chat_id == topic_chat_id).first().slave_uid
+            else:
+                return TopicAssoc.select(TopicAssoc.slave_uid)\
+                    .where(TopicAssoc.topic_chat_id == topic_chat_id).first().slave_uid
+        except DoesNotExist:
+            return None
+        except AttributeError:
+            return None
+
+    @staticmethod
+    def get_topic_slaves(topic_chat_id: TelegramChatID) -> Optional[List[Tuple[EFBChannelChatIDStr, TelegramTopicID]]]:
+        """
+        Get topic association (topic link) information.
+        Only one parameter is to be provided.
+
+        Args:
+            topic_chat_id (TelegramChatID): The topic UID
+
+        Returns:
+            List[Tuple[EFBChannelChatIDStr, TelegramTopicID]]: A list of tuples containing slave channel UID and message thread ID
+        """
+        try:
+            query = TopicAssoc.select(TopicAssoc.slave_uid, TopicAssoc.message_thread_id)\
+                .where(TopicAssoc.topic_chat_id == topic_chat_id).order_by(TopicAssoc.id.desc())
+            return [(row.slave_uid, int(row.message_thread_id)) for row in query]
+        except DoesNotExist:
+            return None
+        except AttributeError:
+            return None
+
+    @staticmethod
+    def remove_topic_assoc(topic_chat_id: Optional[TelegramChatID] = None,
+                           message_thread_id: Optional[EFBChannelChatIDStr] = None,
+                           slave_uid: Optional[EFBChannelChatIDStr] = None):
+        """
+        Remove topic association (topic link).
+
+        Args:
+            topic_chat_id (TelegramChatID): The topic group chat ID
+            message_thread_id (EFBChannelChatIDStr): The topic thread ID
+            slave_uid (EFBChannelChatIDStr): Slave channel UID ("%(channel_id)s.%(chat_id)s")
+        """
+        try:
+            if bool(topic_chat_id and message_thread_id) == bool(slave_uid):
+                raise ValueError("Please provide either topic_chat_id and message_thread_id or slave_uid.")
+            elif topic_chat_id and message_thread_id:
+                return TopicAssoc.delete().where(
+                    (TopicAssoc.topic_chat_id == str(topic_chat_id)) &
+                    (TopicAssoc.message_thread_id == str(message_thread_id))
+                ).execute()
+            elif slave_uid:
+                return TopicAssoc.delete().where(TopicAssoc.slave_uid == slave_uid).execute()
+        except DoesNotExist:
+            return 0
 
     def add_or_update_message_log(self,
                                   msg: ETMMsg,

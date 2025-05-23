@@ -128,6 +128,7 @@ class TelegramChannel(MasterChannel):
         self.commands: CommandsManager = CommandsManager(self)
         self.chat_binding: ChatBindingManager = ChatBindingManager(self)
         self.slave_messages: SlaveMessageProcessor = SlaveMessageProcessor(self)
+        self.topic_group: Optional[TelegramChatID] = TelegramChatID(self.flag('topic_group'))
 
         if not self.flag('auto_locale'):
             self.translator = translation("efb_telegram_master",
@@ -204,14 +205,47 @@ class TelegramChannel(MasterChannel):
         assert isinstance(update, Update)
         assert isinstance(update.effective_message, Message)
         if update.effective_message.chat.type != telegram.Chat.PRIVATE:  # Group message
-            msg = self.info_group(update)
+            if update.effective_chat.is_forum:
+                msg = self.info_topic(update)
+            else:
+                msg = self.info_group(update)
         elif update.effective_message.forward_from_chat and \
                 update.effective_message.forward_from_chat.type == 'channel':  # Forwarded channel command.
             msg = self.info_channel(update)
         else:  # Talking to the bot.
             msg = self.info_general()
 
-        update.effective_message.reply_text(msg)
+        if len(msg) > 4095:
+            for x in range(0, len(msg), 4095):
+                update.effective_message.reply_text(msg[x:x+4095])
+        else:
+            update.effective_message.reply_text(msg)
+
+    def info_topic(self, update: Update):
+        """Generate string for chat linking info of a topic."""
+        assert isinstance(update, Update)
+        assert isinstance(update.effective_message, Message)
+
+        links = self.db.get_topic_slaves(topic_chat_id=update.effective_message.chat_id)
+        thread_id = update.effective_message.message_thread_id
+        if thread_id:
+            chat = None
+            for (dest, topic_id) in links:
+                if topic_id == thread_id:
+                    chat = dest
+                    break
+            if chat is None:
+                return "This chat is not managed by this bot"
+            else:
+                links = [chat]
+        else:
+            links = [c for c, t in links]
+
+        msg = self._("The topic {topic_name} ({topic_id}) is linked to:").format(
+            topic_name=update.effective_message.chat.title,
+            topic_id=update.effective_message.chat_id)
+        msg += self.build_link_chats_info_str(links)
+        return msg
 
     def info_general(self):
         """Generate string for information of the current running EFB instance."""
@@ -322,9 +356,10 @@ class TelegramChannel(MasterChannel):
         assert isinstance(update.effective_message, telegram.Message)
         assert isinstance(update.effective_chat, telegram.Chat)
         if context.args:  # Group binding command
-            if update.effective_message.chat.type != telegram.Chat.PRIVATE or \
+            if (update.effective_message.chat.type != telegram.Chat.PRIVATE and update.effective_chat.id != self.topic_group) or \
                     (update.effective_message.forward_from_chat and
-                     update.effective_message.forward_from_chat.type == telegram.Chat.CHANNEL):
+                     update.effective_message.forward_from_chat.type == telegram.Chat.CHANNEL and
+                     update.effective_message.forward_from_chat.id != self.topic_group):
                 self.chat_binding.link_chat(update, context.args)
             else:
                 self.bot_manager.send_message(update.effective_chat.id,
