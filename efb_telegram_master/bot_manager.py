@@ -489,9 +489,18 @@ class TelegramBotManager(LocaleMixin):
         return self.updater.bot.edit_message_caption(*args, **kwargs)
 
     @Decorators.retry_on_timeout
+    @Decorators.caption_affix_decorator
     @Decorators.retry_on_chat_migration
     def edit_message_media(self, *args, **kwargs):
-        return self.updater.bot.edit_message_media(*args, **kwargs)
+        text = kwargs.pop('caption', '')
+        parse_mode = kwargs.pop('parse_mode', None)
+        caption_entities = kwargs.pop('caption_entities', None)
+        edited_media_message = self.updater.bot.edit_message_media(*args, **kwargs)
+        if len(text) > 0:
+            kwargs.pop('media', None)
+            return self.updater.bot.edit_message_caption(*args, caption=text, parse_mode=parse_mode, caption_entities=caption_entities, **kwargs)
+        else:
+            return edited_media_message
 
     def reply_error(self, update, errmsg):
         """
