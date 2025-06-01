@@ -455,9 +455,9 @@ class SlaveMessageProcessor(LocaleMixin):
                         media: InputMedia
                         file = self.process_file_obj(msg.file, msg.path)
                         if send_as_file:
-                            media = InputMediaDocument(file)
+                            media = InputMediaDocument(file, filename=msg.filename)
                         else:
-                            media = InputMediaPhoto(file)
+                            media = InputMediaPhoto(file, filename=msg.filename)
                         self.bot.edit_message_media(chat_id=old_msg_id[0], message_id=old_msg_id[1], media=media)
                     return self.bot.edit_message_caption(chat_id=old_msg_id[0], message_id=old_msg_id[1],
                                                          reply_markup=reply_markup,
@@ -535,7 +535,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 if edit_media:
                     assert msg.file and msg.path
                     file = self.process_file_obj(msg.file, msg.path)
-                    self.bot.edit_message_media(chat_id=old_msg_id[0], message_id=old_msg_id[1], media=InputMediaAnimation(file))
+                    self.bot.edit_message_media(chat_id=old_msg_id[0], message_id=old_msg_id[1], media=InputMediaAnimation(file, filename=msg.filename))
                 return self.bot.edit_message_caption(chat_id=old_msg_id[0], message_id=old_msg_id[1],
                                                      prefix=msg_template, suffix=reactions,
                                                      reply_markup=reply_markup,
@@ -693,7 +693,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 if edit_media:
                     assert msg.file is not None and msg.path is not None
                     file = self.process_file_obj(msg.file, msg.path)
-                    self.bot.edit_message_media(chat_id=old_msg_id[0], message_id=old_msg_id[1], media=InputMediaDocument(file))
+                    self.bot.edit_message_media(chat_id=old_msg_id[0], message_id=old_msg_id[1], media=InputMediaDocument(file, filename=msg.filename))
                 return self.bot.edit_message_caption(chat_id=old_msg_id[0], message_id=old_msg_id[1], reply_markup=reply_markup,
                                                      prefix=msg_template, suffix=reactions, caption=text, parse_mode="HTML")
             assert msg.file is not None and msg.path is not None
@@ -828,7 +828,7 @@ class SlaveMessageProcessor(LocaleMixin):
                 if edit_media:
                     assert msg.file is not None and msg.path is not None
                     file = self.process_file_obj(msg.file, msg.path)
-                    self.bot.edit_message_media(chat_id=old_msg_id[0], message_id=old_msg_id[1], media=InputMediaVideo(file))
+                    self.bot.edit_message_media(chat_id=old_msg_id[0], message_id=old_msg_id[1], media=InputMediaVideo(file, filename=msg.filename))
                 return self.bot.edit_message_caption(chat_id=old_msg_id[0], message_id=old_msg_id[1], reply_markup=reply_markup,
                                                      prefix=msg_template, suffix=reactions, caption=text, parse_mode="HTML")
             assert msg.file is not None and msg.path is not None
