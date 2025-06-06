@@ -828,29 +828,17 @@ class SlaveMessageProcessor(LocaleMixin):
                     return self.bot.edit_message_caption(chat_id=old_msg_id[0], message_id=old_msg_id[1],
                                                          reply_markup=reply_markup, prefix=msg_template,
                                                          suffix=reactions, caption=text, parse_mode="HTML")
-            # Sending new message (initial or fallback)
-            if not old_msg_id: # Ensure we are in the 'send new' path
-                assert msg.file is not None
-                with tempfile.NamedTemporaryFile(suffix=".ogg") as f: # Ensure correct suffix for pydub
-                    try:
-                        pydub.AudioSegment.from_file(msg.file).export(f.name, format="ogg", codec="libopus",
-                                                                      parameters=['-vbr', 'on'])
-                        # process_file_obj might return URI or file object. send_voice expects content or path.
-                        processed_path = self.process_file_obj(f, f.name) # Get path/URI
-                        # Send using the path/URI
-                        tg_msg = self.bot.send_voice(tg_dest, processed_path, prefix=msg_template, suffix=reactions,
-                                                     caption=text, parse_mode="HTML",
-                                                     reply_to_message_id=target_msg_id,
-                                                     message_thread_id=thread_id, reply_markup=reply_markup,
-                                                     disable_notification=silent)
-                        return tg_msg
-                    except pydub.exceptions.CouldntDecodeError as e:
-                        self.logger.error("[%s] Failed to decode audio file for conversion: %s. Sending as file.", msg.uid, e)
-                        msg.file.seek(0)
-                        # Fallback to sending as a generic file
-                        return self.slave_message_file(msg, tg_dest, thread_id, msg_template, reactions,
-                                                       old_msg_id=None, # Ensure it sends as new
-                                                       target_msg_id=target_msg_id, reply_markup=reply_markup, silent=silent)
+
+            assert msg.file is not None
+            with tempfile.NamedTemporaryFile() as f:
+                pydub.AudioSegment.from_file(msg.file).export(f, format="ogg", codec="libopus",
+                                                              parameters=['-vbr', 'on'])
+                file = self.process_file_obj(f, f.name)
+                tg_msg = self.bot.send_voice(tg_dest, file, prefix=msg_template, suffix=reactions,
+                                             caption=text, parse_mode="HTML",
+                                             reply_to_message_id=target_msg_id, reply_markup=reply_markup,
+                                             message_thread_id=thread_id,
+                                             disable_notification=silent)
             return tg_msg
         finally:
             if msg.file is not None:
