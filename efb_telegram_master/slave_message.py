@@ -811,7 +811,7 @@ class SlaveMessageProcessor(LocaleMixin):
 
             if old_msg_id:
                 if edit_media:
-                    self.logger.warning("[%s] Cannot edit voice message media. Sending new message instead.", msg.uid)
+                    # Cannot edit voice message content, send a new one instead
                     msg_template += " " + self._("[Edited]")
                     if str(tg_dest) == old_msg_id[0]:
                         target_msg_id = target_msg_id or old_msg_id[1]
@@ -820,7 +820,6 @@ class SlaveMessageProcessor(LocaleMixin):
                     return self.bot.edit_message_caption(chat_id=old_msg_id[0], message_id=old_msg_id[1],
                                                          reply_markup=reply_markup, prefix=msg_template,
                                                          suffix=reactions, caption=text, parse_mode="HTML")
-
             assert msg.file is not None
             with tempfile.NamedTemporaryFile() as f:
                 pydub.AudioSegment.from_file(msg.file).export(f, format="ogg", codec="libopus",
