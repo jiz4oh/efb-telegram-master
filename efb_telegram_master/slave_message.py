@@ -17,7 +17,7 @@ import telegram.constants
 import telegram.error
 import telegram.ext
 from PIL import Image
-from telegram import InputFile, ChatAction, InputMediaPhoto, InputMediaDocument, InputMediaVideo, InputMediaAnimation, \
+from telegram import InputFile, ChatAction, InputMediaAudio, InputMediaPhoto, InputMediaDocument, InputMediaVideo, InputMediaAnimation, \
     InlineKeyboardMarkup, InlineKeyboardButton, ReplyMarkup, TelegramError, InputMedia
 
 from ehforwarderbot import Message, Status, coordinator
@@ -739,10 +739,17 @@ class SlaveMessageProcessor(LocaleMixin):
 
             if old_msg_id:
                 if edit_media:
-                    # Cannot edit voice message content, send a new one instead
-                    msg_template += " " + self._("[Edited]")
-                    if str(tg_dest) == old_msg_id[0]:
-                        target_msg_id = target_msg_id or old_msg_id[1]
+                    original_message = self.channel.get_message_by_id(msg.chat, old_msg_id[1])
+                    if original_message and original_message.type == MsgType.Voice:
+                        # Cannot edit voice message content, send a new one instead
+                        msg_template += " " + self._("[Edited]")
+                        if str(tg_dest) == old_msg_id[0]:
+                            target_msg_id = target_msg_id or old_msg_id[1]
+                    else:
+                        assert msg.file is not None and msg.path is not None
+                        file = self.process_file_obj(msg.file, msg.path)
+                        return self.bot.edit_message_media(chat_id=old_msg_id[0], message_id=old_msg_id[1], media=InputMediaAudio(file, filename=msg.filename), reply_markup=reply_markup,
+                                                                prefix=msg_template, suffix=reactions, caption=text, parse_mode="HTML")
                 else:
                     return self.bot.edit_message_caption(chat_id=old_msg_id[0], message_id=old_msg_id[1],
                                                          reply_markup=reply_markup, prefix=msg_template,
