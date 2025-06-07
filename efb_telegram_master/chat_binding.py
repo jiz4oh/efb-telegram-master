@@ -6,6 +6,7 @@ import logging
 import re
 import urllib.parse
 import threading
+import time
 from contextlib import suppress
 from typing import Tuple, Dict, Optional, List, TYPE_CHECKING, IO, Union, Pattern
 
@@ -25,6 +26,7 @@ from ehforwarderbot.types import ModuleID, ChatID, MessageID
 from . import utils
 from .chat import ETMChatType, ETMGroupChat
 from .constants import Emoji, Flags
+from .db import MsgLog
 from .locale_mixin import LocaleMixin
 from .message import ETMMsg
 from .msg_type import TGMsgType
@@ -592,6 +594,7 @@ class ChatBindingManager(LocaleMixin):
             slave_uid=chat_uid,
         )
 
+        thread_id = None
         if tg_chat_to_link.is_forum:
             thread_id = self.create_topic(slave_uid=chat_uid, telegram_chat_id=TelegramChatID(tg_chat_to_link.id))
             if not thread_id:
@@ -610,6 +613,24 @@ class ChatBindingManager(LocaleMixin):
                                    message_id=storage_key[1],
                                    text=txt)
         self.msg_storage.pop(storage_key, None)
+
+        # migrate history
+        try:
+            self.migrate_chat_history(chat_uid, tg_chat_to_link.id, thread_id)
+        except Exception as e:
+            self.logger.warning("History migration failed for %s: %s", chat_display_name, e)
+            # Send a notice to user about failed migration
+            try:
+                notice_kwargs = {
+                    'chat_id': tg_chat_to_link.id,
+                    'text': self._("⚠️ 历史消息迁移失败，但聊天绑定成功"),
+                    'disable_notification': True
+                }
+                if thread_id:
+                    notice_kwargs['message_thread_id'] = thread_id
+                self.bot.send_message(**notice_kwargs)
+            except Exception:
+                pass  # Ignore if we can't send the notice
 
     def unlink_all(self, update: Update, context: CallbackContext):
         """
@@ -1118,6 +1139,170 @@ class ChatBindingManager(LocaleMixin):
         for i in self.db.get_chat_assoc(master_uid=from_str):
             self.db.add_chat_assoc(master_uid=to_str, slave_uid=i, multiple_slave=True)
         self.db.remove_chat_assoc(master_uid=from_str)
+
+    def migrate_chat_history(self, slave_chat_id: EFBChannelChatIDStr, 
+                           tg_chat_id: int, thread_id: Optional[TelegramTopicID] = None):
+        """Migrate historical messages to the newly linked chat.
+        
+        Args:
+            slave_chat_id: The slave chat identifier
+            tg_chat_id: The Telegram chat ID to migrate messages to  
+            thread_id: Optional thread ID for forum groups
+        """
+        try:
+            # Get recent messages (up to 30) from this chat
+            recent_messages = self.db.get_recent_messages(slave_chat_id, limit=30)
+            
+            if not recent_messages:
+                return
+                
+            self.logger.info("Migrating %s historical messages for chat %s", len(recent_messages), slave_chat_id)
+            
+            # Separate text and media messages
+            text_messages = []
+            media_messages = []
+            
+            for msg_log in recent_messages:
+                if msg_log.media_type and msg_log.media_type != 'text':
+                    media_messages.append(msg_log)
+                else:
+                    text_messages.append(msg_log)
+            
+            # Send text messages first, then media messages
+            if text_messages:
+                try:
+                    self._send_combined_text_messages(text_messages, tg_chat_id, thread_id)
+                    if media_messages:
+                        time.sleep(4)
+                except Exception as e:
+                    self.logger.warning("Failed to send combined text messages: %s", e)
+                    
+            # Forward media messages after text messages
+            for i, msg_log in enumerate(media_messages):
+                try:
+                    self._forward_media_message(msg_log, tg_chat_id, thread_id)
+                    # Add delay to avoid rate limiting
+                    if i < len(media_messages) - 1:
+                        time.sleep(4)
+                except Exception as e:
+                    self.logger.warning("Failed to forward media message %s: %s", msg_log.master_msg_id, e)
+                    
+        except Exception as e:
+            self.logger.error("Error during history migration for %s: %s", slave_chat_id, e)
+
+    def _forward_media_message(self, msg_log: MsgLog, tg_chat_id: int, 
+                             thread_id: Optional[TelegramTopicID] = None):
+        """Forward a media message to the target chat."""
+        # Parse the original message ID
+        try:
+            original_chat_id, original_msg_id = utils.message_id_str_to_id(msg_log.master_msg_id)
+            
+            # Use copy_message to copy the media
+            kwargs = {
+                'chat_id': tg_chat_id,
+                'from_chat_id': original_chat_id,
+                'message_id': original_msg_id,
+                'disable_notification': True
+            }
+            
+            if thread_id:
+                kwargs['message_thread_id'] = thread_id
+                
+            self.bot.copy_message(**kwargs)
+            
+        except Exception as e:
+            self.logger.warning("Failed to forward media message %s: %s", msg_log.master_msg_id, e)
+
+    def _send_combined_text_messages(self, text_messages: List[MsgLog], tg_chat_id: int,
+                                   thread_id: Optional[TelegramTopicID] = None):
+        """Combine text messages and send as batched messages with delays."""
+        if not text_messages:
+            return
+            
+        # Group messages into batches to avoid very long messages
+        messages_to_send = []
+        current_batch = []
+        header_length = len(self._("📄 *历史消息记录* 📄\n\n"))
+        current_length = header_length
+        
+        for msg_log in text_messages:
+            try:
+                # Build message info from database
+                etm_msg = msg_log.build_etm_msg(self.chat_manager, recur=False)
+                
+                # Format timestamp
+                timestamp = msg_log.time.strftime("%m-%d %H:%M") if msg_log.time else "Unknown"
+                
+                # Get author name
+                author_name = etm_msg.author.display_name if etm_msg.author else "Unknown"
+                
+                # Add message to combined text
+                message_text = msg_log.text or ""
+                
+                formatted_msg = f"*{author_name}* `{timestamp}`\n{message_text}\n\n"
+                
+                # If single message is too long, send independently
+                if len(formatted_msg) + header_length > 3500:
+                    independent_msg = self._("📄 *历史消息记录* 📄\n\n") + formatted_msg
+                    messages_to_send.append([independent_msg])
+                    continue
+                
+                # Check if batch would exceed limit
+                if current_length + len(formatted_msg) > 3500:
+                    if current_batch:
+                        messages_to_send.append(current_batch)
+                    current_batch = [formatted_msg]
+                    current_length = header_length + len(formatted_msg)
+                else:
+                    current_batch.append(formatted_msg)
+                    current_length += len(formatted_msg)
+                    
+            except Exception as e:
+                self.logger.warning("Failed to process text message %s: %s", msg_log.master_msg_id, e)
+                continue
+        
+        # Add the last batch if it has content
+        if current_batch:
+            messages_to_send.append(current_batch)
+        
+        # Send batched messages with delays
+        for i, batch in enumerate(messages_to_send):
+            if not batch:
+                continue
+                
+            # Check if this is an independent message (already includes header)
+            if len(batch) == 1 and batch[0].startswith(self._("📄 *历史消息记录* 📄")):
+                combined_text = batch[0]
+            else:
+                # Build the complete message for this batch
+                combined_text = self._("📄 *历史消息记录* 📄\n\n")
+                combined_text += "".join(batch)
+                
+                if i < len(messages_to_send) - 1:
+                    combined_text += self._("... (继续)")
+            
+            kwargs = {
+                'chat_id': tg_chat_id,
+                'text': combined_text,
+                'parse_mode': 'Markdown',
+                'disable_notification': True
+            }
+            
+            if thread_id:
+                kwargs['message_thread_id'] = thread_id
+                
+            try:
+                self.bot.send_message(**kwargs)
+                if i < len(messages_to_send) - 1:
+                    time.sleep(4)
+            except Exception as e:
+                # If markdown fails, try without formatting
+                self.logger.warning("Failed to send with Markdown, trying plain text: %s", e)
+                kwargs['parse_mode'] = None
+                kwargs['text'] = combined_text.replace('*', '').replace('`', '')
+                self.bot.send_message(**kwargs)
+                if i < len(messages_to_send) - 1:
+                    time.sleep(4)
 
     @staticmethod
     def truncate_ellipsis(text: str, length: int) -> str:

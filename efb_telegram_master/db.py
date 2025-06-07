@@ -688,3 +688,21 @@ class DatabaseManager:
             ).order_by(MsgLog.time.desc()).limit(1).first()
         except DoesNotExist:
             return None
+
+    @staticmethod
+    def get_recent_messages(slave_chat_id: EFBChannelChatIDStr, limit: int = 30) -> List[MsgLog]:
+        """Get recent messages from a specific slave chat for migration purposes.
+        
+        Args:
+            slave_chat_id: Slave chat identifier in string format
+            limit: Maximum number of messages to retrieve (default: 30)
+            
+        Returns:
+            List[MsgLog]: List of recent message logs, ordered by time (oldest first)
+        """
+        try:
+            return list(MsgLog.select().where(
+                MsgLog.slave_origin_uid == slave_chat_id
+            ).order_by(MsgLog.time.asc()).limit(limit))
+        except DoesNotExist:
+            return []
