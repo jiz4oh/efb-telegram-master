@@ -410,11 +410,11 @@ class DatabaseManager:
             if topic_chat_id:
                 assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
                     .where(TopicAssoc.slave_uid == slave_uid, TopicAssoc.topic_chat_id == topic_chat_id)\
-                    .order_by(TopicAssoc.id.desc()).first()
+                    .order_by(TopicAssoc.topic_chat_id.desc()).first()
             else:
                 assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
                     .where(TopicAssoc.slave_uid == slave_uid)\
-                    .order_by(TopicAssoc.id.desc()).first()
+                    .order_by(TopicAssoc.topic_chat_id.desc()).first()
             if assoc:
                 return TelegramTopicID(int(assoc.message_thread_id))
         except DoesNotExist:
