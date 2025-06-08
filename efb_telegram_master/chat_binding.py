@@ -1283,7 +1283,7 @@ class ChatBindingManager(LocaleMixin):
 
     def _forward_media_message(self, msg_log: MsgLog, tg_chat_id: int,
                              thread_id: Optional[TelegramTopicID] = None):
-        """Forward a media message to the target chat."""
+        """Forward(Actually copy for better user experience) a media message to the target chat."""
         # Parse the original message ID
         try:
             original_chat_id, original_msg_id = utils.message_id_str_to_id(msg_log.master_msg_id)
@@ -1299,7 +1299,7 @@ class ChatBindingManager(LocaleMixin):
             if thread_id:
                 kwargs['message_thread_id'] = thread_id
 
-            self.bot.forward_message(**kwargs)
+            self.bot.copy_message(**kwargs)
 
         except Exception as e:
             self.logger.warning("Failed to forward media message %s: %s", msg_log.master_msg_id, e)
