@@ -690,12 +690,12 @@ class DatabaseManager:
             return None
 
     @staticmethod
-    def get_recent_messages(slave_chat_id: EFBChannelChatIDStr, limit: int = 30) -> List[MsgLog]:
+    def get_recent_messages(slave_chat_id: EFBChannelChatIDStr, limit: int = 1000) -> List[MsgLog]:
         """Get recent messages from a specific slave chat for migration purposes.
         
         Args:
             slave_chat_id: Slave chat identifier in string format
-            limit: Maximum number of messages to retrieve (default: 30)
+            limit: Maximum number of messages to retrieve (default: 1000)
             
         Returns:
             List[MsgLog]: List of recent message logs, ordered by time (oldest first)
