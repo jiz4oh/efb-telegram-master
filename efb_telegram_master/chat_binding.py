@@ -1211,7 +1211,7 @@ class ChatBindingManager(LocaleMixin):
                     etm_msg = msg_log.build_etm_msg(self.chat_manager, recur=False)
 
                     # Format timestamp
-                    timestamp = msg_log.time.strftime("%m-%d %H:%M") if msg_log.time else "Unknown"
+                    timestamp = msg_log.time.strftime("%Y-%m-%d %H:%M") if msg_log.time else "Unknown"
 
                     # Get author name
                     author_name = etm_msg.author.display_name if etm_msg.author else "Unknown"
