@@ -1179,8 +1179,7 @@ class ChatBindingManager(LocaleMixin):
 
             # Process messages in chronological order with mixed approach
             current_text_batch = []
-            header_length = len(self._("📄 *历史消息记录* 📄\n\n"))
-            current_length = header_length
+            current_length = 0
 
             for i, msg_log in enumerate(recent_messages):
                 # Check if message text is empty or doesn't exist
@@ -1193,7 +1192,7 @@ class ChatBindingManager(LocaleMixin):
                         try:
                             self._send_text_batch_background(current_text_batch, tg_chat_id, thread_id)
                             current_text_batch = []
-                            current_length = header_length
+                            current_length = 0
                             threading.Event().wait(4.0)
                         except Exception as e:
                             self.logger.warning("Failed to send text batch: %s", e)
@@ -1228,13 +1227,13 @@ class ChatBindingManager(LocaleMixin):
                             try:
                                 self._send_text_batch_background(current_text_batch, tg_chat_id, thread_id)
                                 # Add delay after sending text batch
-                                threading.Event().wait(2.0)
+                                threading.Event().wait(4.0)
                             except Exception as e:
                                 self.logger.warning("Failed to send text batch: %s", e)
                         
                         # Start new batch with current message
                         current_text_batch = [formatted_msg]
-                        current_length = header_length + len(formatted_msg)
+                        current_length = len(formatted_msg)
                     else:
                         # Add to current batch
                         current_text_batch.append(formatted_msg)
@@ -1262,9 +1261,7 @@ class ChatBindingManager(LocaleMixin):
         if not text_batch:
             return
 
-        # Build the complete message for this batch
-        combined_text = self._("📄 *历史消息记录* 📄\n\n")
-        combined_text += "".join(text_batch)
+        combined_text = "".join(text_batch)
 
         kwargs = {
             'chat_id': tg_chat_id,
@@ -1279,7 +1276,6 @@ class ChatBindingManager(LocaleMixin):
         try:
             self.bot.send_message(**kwargs)
         except Exception as e:
-            # If markdown fails, try without formatting
             self.logger.warning("Failed to send with Markdown, trying plain text: %s", e)
             kwargs['parse_mode'] = None
             kwargs['text'] = combined_text.replace('*', '').replace('`', '')
