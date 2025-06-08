@@ -1242,13 +1242,13 @@ class ChatBindingManager(LocaleMixin):
                 formatted_msg = f"*{author_name}* `{timestamp}`\n{message_text}\n\n"
 
                 # If single message is too long, send independently
-                if len(formatted_msg) + header_length > 3500:
+                if len(formatted_msg) + header_length > 4096:
                     independent_msg = self._("📄 *历史消息记录* 📄\n\n") + formatted_msg
                     messages_to_send.append([independent_msg])
                     continue
 
                 # Check if batch would exceed limit
-                if current_length + len(formatted_msg) > 3500:
+                if current_length + len(formatted_msg) > 4096:
                     if current_batch:
                         messages_to_send.append(current_batch)
                     current_batch = [formatted_msg]
