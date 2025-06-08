@@ -1144,6 +1144,26 @@ class ChatBindingManager(LocaleMixin):
                            tg_chat_id: int, thread_id: Optional[TelegramTopicID] = None):
         """Migrate historical messages to the newly linked chat.
         
+        This method now runs in a background thread to avoid blocking the bot.
+        
+        Args:
+            slave_chat_id: The slave chat identifier
+            tg_chat_id: The Telegram chat ID to migrate messages to  
+            thread_id: Optional thread ID for forum groups
+        """
+        # Run migration in background thread to avoid blocking the bot
+        migration_thread = threading.Thread(
+            target=self._migrate_chat_history_background,
+            args=(slave_chat_id, tg_chat_id, thread_id),
+            daemon=True,  # Allow program to exit even if migration is ongoing
+            name=f"HistoryMigration-{slave_chat_id}"
+        )
+        migration_thread.start()
+
+    def _migrate_chat_history_background(self, slave_chat_id: EFBChannelChatIDStr,
+                                       tg_chat_id: int, thread_id: Optional[TelegramTopicID] = None):
+        """Background method that performs the actual migration work.
+        
         Args:
             slave_chat_id: The slave chat identifier
             tg_chat_id: The Telegram chat ID to migrate messages to  
@@ -1152,10 +1172,10 @@ class ChatBindingManager(LocaleMixin):
         try:
             # Get recent messages (up to 30) from this chat
             recent_messages = self.db.get_recent_messages(slave_chat_id, limit=30)
-            
+
             if not recent_messages:
                 return
-                
+
             self.logger.info("Migrating %s historical messages for chat %s", len(recent_messages), slave_chat_id)
 
             # Separate text and media messages
@@ -1171,9 +1191,9 @@ class ChatBindingManager(LocaleMixin):
             # Send text messages first, then media messages
             if text_messages:
                 try:
-                    self._send_combined_text_messages(text_messages, tg_chat_id, thread_id)
+                    self._send_combined_text_messages_background(text_messages, tg_chat_id, thread_id)
                     if media_messages:
-                        time.sleep(4)
+                        threading.Event().wait(4.0)
                 except Exception as e:
                     self.logger.warning("Failed to send combined text messages: %s", e)
 
@@ -1183,39 +1203,19 @@ class ChatBindingManager(LocaleMixin):
                     self._forward_media_message(msg_log, tg_chat_id, thread_id)
                     # Add delay to avoid rate limiting
                     if i < len(media_messages) - 1:
-                        time.sleep(4)
+                        threading.Event().wait(4.0)
                 except Exception as e:
                     self.logger.warning("Failed to forward media message %s: %s", msg_log.master_msg_id, e)
 
         except Exception as e:
             self.logger.error("Error during history migration for %s: %s", slave_chat_id, e)
 
-    def _forward_media_message(self, msg_log: MsgLog, tg_chat_id: int, 
-                             thread_id: Optional[TelegramTopicID] = None):
-        """Forward a media message to the target chat."""
-        # Parse the original message ID
-        try:
-            original_chat_id, original_msg_id = utils.message_id_str_to_id(msg_log.master_msg_id)
-
-            # Use copy_message to copy the media
-            kwargs = {
-                'chat_id': tg_chat_id,
-                'from_chat_id': original_chat_id,
-                'message_id': original_msg_id,
-                'disable_notification': True
-            }
-
-            if thread_id:
-                kwargs['message_thread_id'] = thread_id
-
-            self.bot.forward_message(**kwargs)
-
-        except Exception as e:
-            self.logger.warning("Failed to forward media message %s: %s", msg_log.master_msg_id, e)
-
-    def _send_combined_text_messages(self, text_messages: List[MsgLog], tg_chat_id: int,
+    def _send_combined_text_messages_background(self, text_messages: List[MsgLog], tg_chat_id: int,
                                    thread_id: Optional[TelegramTopicID] = None):
-        """Combine text messages and send as batched messages with delays."""
+        """Combine text messages and send as batched messages with delays.
+        
+        This is the background version that uses non-blocking delays.
+        """
         if not text_messages:
             return
 
@@ -1294,7 +1294,7 @@ class ChatBindingManager(LocaleMixin):
             try:
                 self.bot.send_message(**kwargs)
                 if i < len(messages_to_send) - 1:
-                    time.sleep(4)
+                    threading.Event().wait(4.0)
             except Exception as e:
                 # If markdown fails, try without formatting
                 self.logger.warning("Failed to send with Markdown, trying plain text: %s", e)
@@ -1302,7 +1302,30 @@ class ChatBindingManager(LocaleMixin):
                 kwargs['text'] = combined_text.replace('*', '').replace('`', '')
                 self.bot.send_message(**kwargs)
                 if i < len(messages_to_send) - 1:
-                    time.sleep(4)
+                    threading.Event().wait(4.0)
+
+    def _forward_media_message(self, msg_log: MsgLog, tg_chat_id: int,
+                             thread_id: Optional[TelegramTopicID] = None):
+        """Forward a media message to the target chat."""
+        # Parse the original message ID
+        try:
+            original_chat_id, original_msg_id = utils.message_id_str_to_id(msg_log.master_msg_id)
+
+            # Use copy_message to copy the media
+            kwargs = {
+                'chat_id': tg_chat_id,
+                'from_chat_id': original_chat_id,
+                'message_id': original_msg_id,
+                'disable_notification': True
+            }
+
+            if thread_id:
+                kwargs['message_thread_id'] = thread_id
+
+            self.bot.forward_message(**kwargs)
+
+        except Exception as e:
+            self.logger.warning("Failed to forward media message %s: %s", msg_log.master_msg_id, e)
 
     @staticmethod
     def truncate_ellipsis(text: str, length: int) -> str:
