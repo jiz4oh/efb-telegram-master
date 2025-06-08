@@ -1226,42 +1226,32 @@ class ChatBindingManager(LocaleMixin):
         current_length = header_length
 
         for msg_log in text_messages:
-            try:
-                # Build message info from database
-                etm_msg = msg_log.build_etm_msg(self.chat_manager, recur=False)
+            # Build message info from database
+            etm_msg = msg_log.build_etm_msg(self.chat_manager, recur=False)
 
-                # Format timestamp
-                timestamp = msg_log.time.strftime("%m-%d %H:%M") if msg_log.time else "Unknown"
+            # Format timestamp
+            timestamp = msg_log.time.strftime("%m-%d %H:%M") if msg_log.time else "Unknown"
 
-                # Get author name
-                author_name = etm_msg.author.display_name if etm_msg.author else "Unknown"
+            # Get author name
+            author_name = etm_msg.author.display_name if etm_msg.author else "Unknown"
 
-                # Add message to combined text
-                message_text = msg_log.text or ""
+            # Add message to combined text
+            message_text = msg_log.text or ""
 
-                formatted_msg = f"*{author_name}* `{timestamp}`\n{message_text}\n\n"
+            # Format message with author and timestamp
+            formatted_msg = f"*{author_name}* `{timestamp}`\n{message_text}\n\n"
+            expected_msg_length = len(formatted_msg)
+            
+            if current_length + expected_msg_length > 4096 - 20:
+                # Current batch is full, start new batch
+                if current_batch:
+                    messages_to_send.append(current_batch)
+                current_batch = [formatted_msg]
+                current_length = header_length + len(formatted_msg)
+            else:
+                current_batch.append(formatted_msg)
+                current_length += len(formatted_msg)
 
-                # If single message is too long, send independently
-                if len(formatted_msg) + header_length > 4096:
-                    independent_msg = self._("📄 *历史消息记录* 📄\n\n") + formatted_msg
-                    messages_to_send.append([independent_msg])
-                    continue
-
-                # Check if batch would exceed limit
-                if current_length + len(formatted_msg) > 4096:
-                    if current_batch:
-                        messages_to_send.append(current_batch)
-                    current_batch = [formatted_msg]
-                    current_length = header_length + len(formatted_msg)
-                else:
-                    current_batch.append(formatted_msg)
-                    current_length += len(formatted_msg)
-
-            except Exception as e:
-                self.logger.warning("Failed to process text message %s: %s", msg_log.master_msg_id, e)
-                continue
-
-        # Add the last batch if it has content
         if current_batch:
             messages_to_send.append(current_batch)
 
