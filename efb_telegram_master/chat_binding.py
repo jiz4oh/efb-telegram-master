@@ -1170,8 +1170,7 @@ class ChatBindingManager(LocaleMixin):
             thread_id: Optional thread ID for forum groups
         """
         try:
-            # Get recent messages (up to 30) from this chat
-            recent_messages = self.db.get_recent_messages(slave_chat_id, limit=30)
+            recent_messages = self.db.get_recent_messages(slave_chat_id, limit=0)
 
             if not recent_messages:
                 return
