@@ -278,7 +278,7 @@ class SlaveMessageProcessor(LocaleMixin):
 
         # Generate chat text template & Decide type target
         tg_dest = TelegramChatID(self.channel.config['admins'][0])
-        
+
         if tg_chat:
             tg_dest = TelegramChatID(int(utils.chat_id_str_to_id(tg_chat)[1]))
         if self.channel.topic_group:

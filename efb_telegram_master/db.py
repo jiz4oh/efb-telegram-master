@@ -410,11 +410,11 @@ class DatabaseManager:
             if topic_chat_id:
                 assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
                     .where(TopicAssoc.slave_uid == slave_uid, TopicAssoc.topic_chat_id == topic_chat_id)\
-                    .order_by(TopicAssoc.id.desc()).first()
+                    .order_by(TopicAssoc.topic_chat_id.desc()).first()
             else:
                 assoc = TopicAssoc.select(TopicAssoc.message_thread_id)\
                     .where(TopicAssoc.slave_uid == slave_uid)\
-                    .order_by(TopicAssoc.id.desc()).first()
+                    .order_by(TopicAssoc.topic_chat_id.desc()).first()
             if assoc:
                 return TelegramTopicID(int(assoc.message_thread_id))
         except DoesNotExist:
@@ -688,3 +688,26 @@ class DatabaseManager:
             ).order_by(MsgLog.time.desc()).limit(1).first()
         except DoesNotExist:
             return None
+
+    @staticmethod
+    def get_recent_messages(slave_chat_id: EFBChannelChatIDStr, limit: int = 1000) -> List[MsgLog]:
+        """Get recent messages from a specific slave chat for migration purposes.
+
+        Args:
+            slave_chat_id: Slave chat identifier in string format
+            limit: Maximum number of messages to retrieve (default: 1000). Use 0 for no limit.
+
+        Returns:
+            List[MsgLog]: List of recent message logs, ordered by time (oldest first)
+        """
+        try:
+            query = MsgLog.select().where(
+                MsgLog.slave_origin_uid == slave_chat_id
+            ).order_by(MsgLog.time.asc())
+
+            if limit > 0:
+                query = query.limit(limit)
+
+            return list(query)
+        except DoesNotExist:
+            return []
