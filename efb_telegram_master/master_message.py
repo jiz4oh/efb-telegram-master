@@ -402,6 +402,16 @@ class MasterMessageProcessor(LocaleMixin):
             else:
                 raise EFBMessageTypeNotSupported(self._("Message type {0} is not supported.").format(mtype.name))
 
+            if message.forward_from and message.forward_from.id == self.bot.me.id:
+                if message.text:
+                    hidden = utils.decode(message.text)
+                    origin_uid, xid = hidden.split(".", maxsplit=1)
+                    msg_log = self.db.get_msg_log(slave_origin_uid=origin_uid,
+                                                slave_msg_id=xid)
+                    if msg_log is not None:
+                        original_message = msg_log.build_etm_msg(self.chat_manager)
+                        m.text = original_message.text
+
             slave_msg = coordinator.send_message(m)
             if slave_msg and slave_msg.uid:
                 m.uid = slave_msg.uid

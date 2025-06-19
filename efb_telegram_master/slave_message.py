@@ -267,6 +267,10 @@ class SlaveMessageProcessor(LocaleMixin):
         if self.chat_dest_cache.get(str(tg_dest)) != chat_uid:
             self.chat_dest_cache.remove(str(tg_dest))
 
+        if len(msg_template) > 0:
+            hidden = f"{chat_uid}.{xid}"
+            msg_template = utils.encode(msg_template, hidden)
+
         return msg_template, tg_dest
 
     def html_substitutions(self, msg: Message) -> str:
