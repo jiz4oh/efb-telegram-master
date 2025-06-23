@@ -1062,23 +1062,24 @@ class SlaveMessageProcessor(LocaleMixin):
 
     def generate_message_template(self, msg: Message, singly_linked: bool) -> str:
         msg_prefix = ""  # For group member name
+        name = f"{msg.author.long_name} [#{msg.author.uid}]"
         if isinstance(msg.chat, GroupChat):
             self.logger.debug("[%s] Message is from a group. Sender: %s", msg.uid, msg.author)
-            msg_prefix = msg.author.long_name
+            msg_prefix = name
 
         if singly_linked:
             if msg_prefix:  # if group message
                 msg_template = f"{msg_prefix}:"
             else:
                 if msg.chat != msg.author:
-                    msg_template = f"{msg.author.long_name}:"
+                    msg_template = f"{name}:"
                 else:
                     msg_template = ""
         elif isinstance(msg.chat, PrivateChat):
             emoji_prefix = msg.chat.channel_emoji + Emoji.USER
             name_prefix = msg.chat.long_name
             if msg.chat.other != msg.author:
-                name_prefix += f", {msg.author.long_name}"
+                name_prefix += f", {name}"
             msg_template = f"{emoji_prefix} {name_prefix}:"
         elif isinstance(msg.chat, GroupChat):
             emoji_prefix = msg.chat.channel_emoji + Emoji.GROUP
