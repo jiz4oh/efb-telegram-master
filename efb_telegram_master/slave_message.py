@@ -783,6 +783,12 @@ class SlaveMessageProcessor(LocaleMixin):
             self.logger.debug("[%s] updated target_msg_id %s", msg.uid, target_msg_id)
 
         location_reply_markup = self.build_chat_info_inline_keyboard(msg, msg_template, reactions, reply_markup)
+        name = html.escape(msg.text)
+        content = html.escape(msg.author.long_name)
+        url = f'https://api.map.baidu.com/marker?title={name}&content={content}&location={attributes.latitude},{attributes.longitude}&output=html&coord_type=gcj02'
+        # gaode require login on pc
+        # url = f'https://uri.amap.com/marker?position={attributes.longitude},{attributes.latitude}&name={name}&coordinate=gaode&callnative=1'
+        location_reply_markup.inline_keyboard = location_reply_markup.inline_keyboard + [[InlineKeyboardButton(f'Open {msg.text} in Baidu Map', url=url)]]
 
         # TODO: Use live location if possible? Lift live location messages to EFB Framework?
         return self.bot.send_location(tg_dest, latitude=attributes.latitude,
