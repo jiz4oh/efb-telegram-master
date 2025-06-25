@@ -876,8 +876,9 @@ class SlaveMessageProcessor(LocaleMixin):
         baidu = f'https://api.map.baidu.com/marker?title={name}&content={content}&location={attributes.latitude},{attributes.longitude}&output=html&coord_type=gcj02'
         # gaode require login on pc
         gaode = f'https://uri.amap.com/marker?position={attributes.longitude},{attributes.latitude}&name={name}&coordinate=gaode&callnative=1'
+        tencent = f'https://apis.map.qq.com/uri/v1/marker?marker=coord:{attributes.latitude},{attributes.longitude};title:{content};addr:{name}'
         location_reply_markup.inline_keyboard = location_reply_markup.inline_keyboard + [
-            [InlineKeyboardButton(self._('Baidu'), url=baidu), InlineKeyboardButton(self._('Gaode'), url=gaode)],
+            [InlineKeyboardButton(self._('Baidu'), url=baidu), InlineKeyboardButton(self._('Gaode'), url=gaode), InlineKeyboardButton(self._('Tencent'), url=tencent)],
         ]
 
         # TODO: Use live location if possible? Lift live location messages to EFB Framework?
