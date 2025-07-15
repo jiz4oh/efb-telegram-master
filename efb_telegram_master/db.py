@@ -144,6 +144,8 @@ class MsgLog(BaseModel):
                 msg.attributes = misc_data['attributes']
             if 'commands' in misc_data:
                 msg.commands = misc_data['commands']
+            if 'vendor_specific' in misc_data:
+                msg.vendor_specific = misc_data['vendor_specific']
             if 'substitutions' in misc_data:
                 subs = Substitutions({})
                 for sk, sv in misc_data['substitutions'].items():
@@ -323,6 +325,8 @@ class DatabaseManager:
             data['attributes'] = message.attributes
         if message.commands:
             data['commands'] = message.commands
+        if message.vendor_specific:
+            data['vendor_specific'] = message.vendor_specific
         if message.substitutions:
             data['substitutions'] = {
                 k: chat_id_to_str(chat=v)
