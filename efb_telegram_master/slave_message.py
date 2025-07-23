@@ -785,7 +785,7 @@ class SlaveMessageProcessor(LocaleMixin):
         location_reply_markup = self.build_chat_info_inline_keyboard(msg, msg_template, reactions, reply_markup)
         name = html.escape(msg.text)
         content = html.escape(msg.author.long_name)
-        baidu = f'https://api.map.baidu.com/marker?title={name}&content={content}&location={attributes.latitude},{attributes.longitude}&output=html&coord_type=gcj02'
+        baidu = f'https://api.map.baidu.com/marker?location={attributes.latitude},{attributes.longitude}&title={name}&content={content}&output=html&coord_type=gcj02'
         # gaode require login on pc
         gaode = f'https://uri.amap.com/marker?position={attributes.longitude},{attributes.latitude}&name={name}&coordinate=gaode&callnative=1'
         tencent = f'https://apis.map.qq.com/uri/v1/marker?marker=coord:{attributes.latitude},{attributes.longitude};title:{content};addr:{name}'
