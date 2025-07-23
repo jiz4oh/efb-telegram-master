@@ -45,13 +45,17 @@ msgstr "[已编辑]"
 msgid "(unsupported)"
 msgstr "(不支持)"
 
-#: efb_telegram_master/slave_message.py:880
+#: efb_telegram_master/slave_message.py:793
 msgid "Baidu"
 msgstr "百度地图"
 
-#: efb_telegram_master/slave_message.py:880
+#: efb_telegram_master/slave_message.py:793
 msgid "Gaode"
 msgstr "高德地图"
+
+#: efb_telegram_master/slave_message.py:793
+msgid "Tencent"
+msgstr "腾讯地图"
 
 #: efb_telegram_master/slave_message.py:919
 #: efb_telegram_master/master_message.py:310
