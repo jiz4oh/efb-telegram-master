@@ -192,7 +192,12 @@ class ChatObjectCacheManager:
     def get_or_enrol_member(cached: ETMChatType, member: ChatMember) -> ETMChatMember:
         # TODO: Add test case for this
         try:
-            return cached.get_member(member.uid)
+            m = cached.get_member(member.uid)
+            m.name = member.name
+            m.alias = member.alias
+            m.description = member.description
+            m.vendor_specific = member.vendor_specific
+            return m
         except KeyError:
             cached_member: ETMChatMember
             if isinstance(member, SystemChatMember):
