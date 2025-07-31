@@ -134,6 +134,9 @@ class SlaveMessageProcessor(LocaleMixin):
                             topic_chat_id=tg_dest,
                             message_thread_id=thread_id,
                         )
+                else:
+                    self.logger.error("Error occurred while processing message from slave channel.\nMessage: %s\n%s\n%s",
+                                repr(msg), repr(e), traceback.format_exc())
             else:
                 self.logger.error("Error occurred while processing message from slave channel.\nMessage: %s\n%s\n%s",
                               repr(msg), repr(e), traceback.format_exc())
