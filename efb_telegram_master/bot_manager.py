@@ -50,11 +50,16 @@ class TelegramBotManager(LocaleMixin):
         @classmethod
         def retry_on_timeout(cls, fn: Callable):
             """Infinitely retry for timed-out exceptions."""
-            if not cls.enable_retry:
-                return fn
-            cls.logger.debug("Trying to call %s with infinite retry.", fn)
-            return retry(wait_exponential_multiplier=1e3, wait_exponential_max=180e3,
-                         retry_on_exception=cls.exception_filter)(fn)
+            @wraps(fn)
+            def retry_wrapper(*args, **kwargs):
+                # Access the instance to get the retry setting
+                if not cls.enable_retry:
+                    return fn(*args, **kwargs)
+                cls.logger.debug("Trying to call %s with infinite retry.", fn)
+                retried_fn = retry(wait_exponential_multiplier=1e3, wait_exponential_max=180e3,
+                                   retry_on_exception=cls.exception_filter)(fn)
+                return retried_fn(*args, **kwargs)
+            return retry_wrapper
 
         @classmethod
         def caption_strip_class_on_failure(cls, fn: Callable):
