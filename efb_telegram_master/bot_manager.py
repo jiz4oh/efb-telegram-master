@@ -143,17 +143,18 @@ class TelegramBotManager(LocaleMixin):
                 except telegram.error.BadRequest as e:
                     if "Topic_closed" in e.message:
                         try:
-                            self.bot.reopen_forum_topic(
-                                chat_id=tg_dest,
-                                message_thread_id=thread_id
+                            if 'chat_id' in kwargs:
+                                chat_id = kwargs['chat_id']
+                            else:
+                                chat_id = args[0]
+                            message_thread_id = kwargs.get('message_thread_id', None)
+                            self.reopen_forum_topic(
+                                chat_id=chat_id,
+                                message_thread_id=message_thread_id
                             )
                             return fn(self, *args, **kwargs)
                         except telegram.error.BadRequest as e:
                             self.logger.error('Failed to reopen topic, Reason: %s', e)
-                            self.db.remove_topic_assoc(
-                                topic_chat_id=tg_dest,
-                                message_thread_id=thread_id,
-                            )
                     else:
                         raise e
             return wrap
