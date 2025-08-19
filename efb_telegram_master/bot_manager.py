@@ -123,6 +123,31 @@ class TelegramBotManager(LocaleMixin):
             return caption_affix
 
         @classmethod
+        def retry_on_topic_closed(cls, fn: Callable):
+            @wraps(fn)
+            def wrap(self: 'TelegramBotManager', *args, **kwargs):
+                try:
+                    return fn(self, *args, **kwargs)
+                except telegram.error.BadRequest as e:
+                    if "Topic_closed" in e.message:
+                        try:
+                            if 'chat_id' in kwargs:
+                                chat_id = kwargs['chat_id']
+                            else:
+                                chat_id = args[0]
+                            message_thread_id = kwargs.get('message_thread_id', None)
+                            self.reopen_forum_topic(
+                                chat_id=chat_id,
+                                message_thread_id=message_thread_id
+                            )
+                            return fn(self, *args, **kwargs)
+                        except telegram.error.BadRequest as e:
+                            self.logger.error('Failed to reopen topic, Reason: %s', e)
+                    else:
+                        raise e
+            return wrap
+
+        @classmethod
         def retry_on_chat_migration(cls, fn: Callable):
             @wraps(fn)
             def retry_on_chat_migration_wrap(self: 'TelegramBotManager', *args, **kwargs):
@@ -182,6 +207,7 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_message(self, *args, prefix: str = '', suffix: str = '', **kwargs):
         """
         Send text message.
@@ -232,6 +258,7 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def edit_message_text(self, prefix='', suffix='', **kwargs):
         """
         Edit text message.
@@ -313,6 +340,7 @@ class TelegramBotManager(LocaleMixin):
     @Decorators.retry_on_timeout
     @Decorators.caption_affix_decorator
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_audio(self, *args, **kwargs):
         """
         Send an audio file.
@@ -337,6 +365,7 @@ class TelegramBotManager(LocaleMixin):
     @Decorators.retry_on_timeout
     @Decorators.caption_affix_decorator
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_voice(self, *args, **kwargs):
         """
         Send an voice message.
@@ -361,6 +390,7 @@ class TelegramBotManager(LocaleMixin):
     @Decorators.retry_on_timeout
     @Decorators.caption_affix_decorator
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_video(self, *args, **kwargs):
         """
         Send an voice message.
@@ -385,6 +415,7 @@ class TelegramBotManager(LocaleMixin):
     @Decorators.retry_on_timeout
     @Decorators.caption_affix_decorator
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_document(self, *args, **kwargs):
         """
         Send a document.
@@ -404,6 +435,7 @@ class TelegramBotManager(LocaleMixin):
     @Decorators.retry_on_timeout
     @Decorators.caption_affix_decorator
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_animation(self, *args, **kwargs):
         """
         Send a document.
@@ -423,6 +455,7 @@ class TelegramBotManager(LocaleMixin):
     @Decorators.retry_on_timeout
     @Decorators.caption_affix_decorator
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_photo(self, *args, **kwargs):
         """
         Send a document.
@@ -444,6 +477,7 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_chat_action(self, *args, **kwargs):
         message_thread_id = kwargs.pop('message_thread_id', None)
         if message_thread_id != None:
@@ -452,26 +486,31 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def edit_message_reply_markup(self, *args, **kwargs):
         return self.updater.bot.edit_message_reply_markup(*args, **kwargs)
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_location(self, *args, **kwargs):
         return self.updater.bot.send_location(*args, **kwargs)
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_venue(self, *args, **kwargs):
         return self.updater.bot.send_venue(*args, **kwargs)
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def send_sticker(self, *args, **kwargs):
         return self.updater.bot.send_sticker(*args, **kwargs)
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def get_me(self, *args, **kwargs):
         return self.updater.bot.get_me(*args, **kwargs)
 
@@ -488,11 +527,13 @@ class TelegramBotManager(LocaleMixin):
     @Decorators.retry_on_timeout
     @Decorators.caption_affix_decorator
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def edit_message_caption(self, *args, **kwargs):
         return self.updater.bot.edit_message_caption(*args, **kwargs)
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def edit_message_media(self, *args, **kwargs):
         return self.updater.bot.edit_message_media(*args, **kwargs)
 
@@ -508,16 +549,19 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def get_file(self, file_id: str) -> File:
         return self.updater.bot.get_file(file_id)
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def delete_message(self, chat_id, message_id):
         return self.updater.bot.delete_message(chat_id, message_id)
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def answer_callback_query(self, *args, prefix="", suffix="", text=None,
                               message_id=None, **kwargs):
         if text is None:
@@ -548,6 +592,7 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def get_chat_info(self, *args, **kwargs):
         return self.updater.bot.get_chat(*args, **kwargs)
 
@@ -558,6 +603,7 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def edit_forum_topic(self, *args, **kwargs):
         return self.updater.bot.edit_forum_topic(*args, **kwargs)
 
@@ -568,16 +614,19 @@ class TelegramBotManager(LocaleMixin):
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def set_chat_title(self, *args, **kwargs):
         return self.updater.bot.set_chat_title(*args, **kwargs)
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def set_chat_photo(self, *args, **kwargs):
         return self.updater.bot.set_chat_photo(*args, **kwargs)
 
     @Decorators.retry_on_timeout
     @Decorators.retry_on_chat_migration
+    @Decorators.retry_on_topic_closed
     def set_chat_description(self, *args, **kwargs):
         return self.updater.bot.set_chat_description(*args, **kwargs)
 
