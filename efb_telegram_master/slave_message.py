@@ -121,24 +121,7 @@ class SlaveMessageProcessor(LocaleMixin):
 
             self.dispatch_message(msg, msg_template, old_msg_id, tg_dest, thread_id, silent)
         except Exception as e:
-            if isinstance(e, telegram.error.BadRequest) and e.message:
-                if "Topic" in e.message:
-                    try:
-                        self.bot.reopen_forum_topic(
-                            chat_id=tg_dest,
-                            message_thread_id=thread_id
-                        )
-                    except telegram.error.BadRequest as e:
-                        self.logger.error('Failed to reopen topic, Reason: %s', e)
-                        self.db.remove_topic_assoc(
-                            topic_chat_id=tg_dest,
-                            message_thread_id=thread_id,
-                        )
-                else:
-                    self.logger.error("Error occurred while processing message from slave channel.\nMessage: %s\n%s\n%s",
-                                repr(msg), repr(e), traceback.format_exc())
-            else:
-                self.logger.error("Error occurred while processing message from slave channel.\nMessage: %s\n%s\n%s",
+            self.logger.error("Error occurred while processing message from slave channel.\nMessage: %s\n%s\n%s",
                               repr(msg), repr(e), traceback.format_exc())
         return msg
 
