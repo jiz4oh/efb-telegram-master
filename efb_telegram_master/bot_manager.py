@@ -45,14 +45,14 @@ class TelegramBotManager(LocaleMixin):
         @classmethod
         def exception_filter(cls, exception: Exception):
             cls.logger.exception("Exception: %s while sending request to Telegram server.", exception)
-            retry_exception = isinstance(exception, telegram.error.TimedOut)
-            
-            if isinstance(exception, telegram.error.NetworkError):
+            if isinstance(exception, telegram.error.TimedOut):
+                return True
+            elif isinstance(exception, telegram.error.NetworkError):
                 exception_message = str(exception).lower()
                 if "remote end closed connection without response" in exception_message:
-                    retry_exception = True
+                    return True
             
-            return retry_exception
+            return False
 
         @classmethod
         def retry_on_timeout(cls, fn: Callable):
