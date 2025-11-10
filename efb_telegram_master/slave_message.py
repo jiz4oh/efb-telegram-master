@@ -857,8 +857,8 @@ class SlaveMessageProcessor(LocaleMixin):
             self.logger.debug("[%s] updated target_msg_id %s", msg.uid, target_msg_id)
 
         location_reply_markup = self.build_chat_info_inline_keyboard(msg, msg_template, reactions, reply_markup)
-        name = html.escape(msg.text)
-        content = html.escape(msg.author.long_name)
+        name = urllib.parse.quote(html.escape(msg.text))
+        content = urllib.parse.quote(html.escape(msg.author.long_name))
         baidu = f'https://api.map.baidu.com/marker?location={attributes.latitude},{attributes.longitude}&title={name}&content={content}&output=html&coord_type=gcj02'
         # gaode require login on pc
         gaode = f'https://uri.amap.com/marker?position={attributes.longitude},{attributes.latitude}&name={name}&coordinate=gaode&callnative=1'
