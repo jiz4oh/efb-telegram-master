@@ -639,6 +639,16 @@ class TelegramBotManager(LocaleMixin):
     def set_chat_description(self, *args, **kwargs):
         return self.updater.bot.set_chat_description(*args, **kwargs)
 
+    @Decorators.retry_on_timeout
+    @Decorators.retry_on_chat_migration
+    def forward_message(self, *args, **kwargs):
+        return self.updater.bot.forward_message(*args, **kwargs)
+
+    @Decorators.retry_on_timeout
+    @Decorators.retry_on_chat_migration
+    def copy_message(self, *args, **kwargs):
+        return self.updater.bot.copy_message(*args, **kwargs)
+
     def polling(self, drop_pending_updates: bool = False):
         """
         Poll message from Telegram Bot API. Can be used to extend for web hook.
