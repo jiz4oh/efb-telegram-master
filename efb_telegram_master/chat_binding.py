@@ -1022,8 +1022,14 @@ class ChatBindingManager(LocaleMixin):
                 )
                 if not slave_origin_uid:
                     return self.bot.reply_error(update, self._("This chat is not managed by this bot. Update failed"))
-                channel_id, chat_id, _ = utils.chat_id_str_to_id(slave_origin_uid)
-                etm_chat: ETMChatType = self.chat_manager.get_chat(channel_id, chat_id, build_dummy=True)
+                channel_id, chat_uid, _ = utils.chat_id_str_to_id(slave_origin_uid)
+                if channel_id not in coordinator.slaves:
+                    self.logger.exception(f"Channel linked ({channel_id}) is not found.")
+                    return self.bot.reply_error(update, self._('Channel linked ({channel}) is not found.')
+                                                .format(channel=channel_id))
+
+                channel = coordinator.slaves[channel_id]
+                etm_chat: ETMChatType = self.chat_manager.update_chat_obj(channel.get_chat(chat_uid), full_update=True)
                 self.bot.edit_forum_topic(
                     chat_id=update.effective_chat.id, 
                     message_thread_id=thread_id, 
