@@ -119,12 +119,34 @@ class SlaveMessageProcessor(LocaleMixin):
                                      'but it does not exist in database. Sending new message instead.',
                                      msg.uid)
 
-            self.dispatch_message(msg, msg_template, old_msg_id, tg_dest, thread_id, silent)
+            self.dispatch_message(msg=msg, msg_template=msg_template, old_msg_id=old_msg_id, tg_dest=tg_dest, thread_id=thread_id, silent=silent)
         except Exception as e:
             self.logger.error("Error occurred while processing message from slave channel.\nMessage: %s\n%s\n%s",
                               repr(msg), repr(e), traceback.format_exc())
         return msg
 
+    @staticmethod
+    def handle_topic_error(fn):
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except telegram.error.BadRequest as e:
+                if "Message thread not found" in e.message:
+                    self = args[0]
+                    self.logger.warning("Message thread not found, removing binding and retrying.")
+                    message_thread_id = kwargs.pop('thread_id')
+                    tg_dest = kwargs.get('tg_dest')
+                    msg = kwargs.get('msg')
+
+                    self.db.remove_topic_assoc(topic_chat_id=tg_dest, message_thread_id=message_thread_id)
+                    if msg.file and getattr(msg.file, 'closed', False) and msg.path:
+                        msg.file = open(msg.path, 'rb')
+                    return fn(*args, msg=msg, tg_dest=tg_dest, message_thread_id=message_thread_id, **kwargs)
+                else:
+                    raise e
+        return wrapper
+
+    @handle_topic_error
     def dispatch_message(self, msg: Message, msg_template: str,
                          old_msg_id: Optional[OldMsgID],
                          tg_dest: TelegramChatID,
@@ -1053,7 +1075,7 @@ class SlaveMessageProcessor(LocaleMixin):
         chat_id, msg_id = utils.message_id_str_to_id(effective_msg)
 
         # Go through the ordinary update process
-        self.dispatch_message(old_msg, msg_template, old_msg_id=(chat_id, msg_id), tg_dest=chat_id)
+        self.dispatch_message(msg=old_msg, msg_template=msg_template, old_msg_id=(chat_id, msg_id), tg_dest=chat_id)
 
     def generate_message_template(self, msg: Message, singly_linked: bool) -> str:
         msg_prefix = ""  # For group member name
