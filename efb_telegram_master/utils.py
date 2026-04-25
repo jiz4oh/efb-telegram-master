@@ -6,6 +6,8 @@ import logging
 import os
 import subprocess
 import sys
+import urllib.parse
+import urllib.request
 from io import BytesIO
 from shutil import copyfileobj
 from tempfile import NamedTemporaryFile
@@ -77,6 +79,25 @@ def b64de(s: str) -> str:
     if missing_padding:
         s += '=' * (4 - missing_padding)
     return base64.urlsafe_b64decode(s).decode()
+
+
+def coerce_local_path(path_or_uri: str) -> str:
+    parts = urllib.parse.urlsplit(path_or_uri)
+    if parts.scheme != "file":
+        return path_or_uri
+
+    path = urllib.request.url2pathname(urllib.parse.unquote(parts.path))
+    if os.name == "nt":
+        if parts.netloc:
+            unc_path = path.replace("/", "\\")
+            return f"\\\\{parts.netloc}{unc_path}"
+        if len(path) >= 3 and path[0] == "/" and path[2] == ":":
+            path = path[1:]
+        return path
+
+    if parts.netloc:
+        return f"//{parts.netloc}{path}"
+    return path
 
 
 def message_id_to_str(chat_id: Optional[TelegramChatID] = None,

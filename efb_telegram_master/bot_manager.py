@@ -13,6 +13,7 @@ from retrying import retry
 from telegram import Update, InputFile, User, File
 from telegram.ext import CallbackContext, Filters, MessageHandler, Updater, Dispatcher
 
+from . import utils
 from .locale_handler import LocaleHandler
 from .locale_mixin import LocaleMixin
 
@@ -581,7 +582,8 @@ class TelegramBotManager(LocaleMixin):
     def _detect_empty_file(self, file, chat, caption, prefix, suffix):
         empty = True
         if isinstance(file, str):
-            empty = os.stat(file).st_size == 0
+            local_path = utils.coerce_local_path(file)
+            empty = os.stat(local_path).st_size == 0
         elif hasattr(file, "seekable"):
             if file.seekable():
                 file.seek(0, 2)
