@@ -603,7 +603,7 @@ class SlaveMessageProcessor(LocaleMixin):
             else:
                 assert msg.file and msg.path
                 file = self.process_file_obj(msg.file, msg.path)
-                file_: Union[IO[bytes], bytes] = open(file, 'rb') if isinstance(file, str) else file
+                file_: Union[IO[bytes], bytes] = open(utils.coerce_local_path(file), 'rb') if isinstance(file, str) else file
                 return self.bot.send_animation(tg_dest, InputFile(file_, filename=msg.filename),
                                                prefix=msg_template, suffix=reactions,
                                                caption=text, parse_mode="HTML",
