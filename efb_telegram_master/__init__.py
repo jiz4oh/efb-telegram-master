@@ -41,6 +41,7 @@ from .master_message import MasterMessageProcessor
 from .message import ETMMsg
 from .rpc_utils import RPCUtilities
 from .slave_message import SlaveMessageProcessor
+from .image_dedupe import ImageDedupeManager
 from .utils import ExperimentalFlagsManager, EFBChannelChatIDStr, TelegramChatID, TelegramMessageID
 
 
@@ -125,6 +126,12 @@ class TelegramChannel(MasterChannel):
         self.chat_manager: ChatObjectCacheManager = ChatObjectCacheManager(self)
         self.chat_dest_cache: ChatDestinationCache = ChatDestinationCache(self.flag("send_to_last_chat"))
         self.bot_manager: TelegramBotManager = TelegramBotManager(self)
+        self.image_dedupe: ImageDedupeManager = ImageDedupeManager(
+            self.db,
+            max_distance=int(self.flag("image_phash_max_distance")),
+            queue_size=int(self.flag("image_phash_queue_size")),
+            enabled=bool(self.flag("image_dedupe_enabled")),
+        )
         self.commands: CommandsManager = CommandsManager(self)
         self.chat_binding: ChatBindingManager = ChatBindingManager(self)
         self.slave_messages: SlaveMessageProcessor = SlaveMessageProcessor(self)
@@ -618,6 +625,7 @@ class TelegramChannel(MasterChannel):
         self.rpc_utilities.shutdown()
         self.bot_manager.graceful_stop()
         self.master_messages.stop_worker()
+        self.image_dedupe.stop_worker()
         self.db.stop_worker()
         self.logger.debug("%s (%s) gracefully stopped.", self.channel_name, self.channel_id)
 

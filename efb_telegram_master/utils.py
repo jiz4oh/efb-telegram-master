@@ -60,6 +60,9 @@ class ExperimentalFlagsManager(LocaleMixin):
         "api_base_file_url": None,
         "local_tdlib_api": False,
         "topic_group": None,
+        "image_dedupe_enabled": False,
+        "image_phash_max_distance": 8,
+        "image_phash_queue_size": 2000,
     }
 
     def __init__(self, channel: 'TelegramChannel'):

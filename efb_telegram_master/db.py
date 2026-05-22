@@ -8,7 +8,7 @@ from contextlib import suppress
 from functools import partial
 from typing import List, Optional, Tuple, Dict, Collection, TYPE_CHECKING
 
-from peewee import Model, TextField, DateTimeField, CharField, DoesNotExist, fn, BlobField
+from peewee import Model, TextField, DateTimeField, CharField, DoesNotExist, fn, BlobField, IntegerField
 from playhouse.sqliteq import SqliteQueueDatabase
 from playhouse.migrate import SqliteMigrator, migrate
 from telegram import Message
@@ -175,6 +175,21 @@ class SlaveChatInfo(BaseModel):
     pickle = BlobField(null=True)
 
 
+class ImagePHash(BaseModel):
+    path = TextField(unique=True)
+    phash = TextField(index=True)
+    phash_prefix = CharField(index=True)
+    tg_file_id = TextField(null=True)
+    tg_file_unique_id = TextField(null=True)
+    tg_media_type = CharField(default="photo")
+    mime = TextField(null=True)
+    width = IntegerField(null=True)
+    height = IntegerField(null=True)
+    file_size = IntegerField(null=True)
+    created_at = DateTimeField(default=datetime.datetime.now)
+    last_seen_at = DateTimeField(default=datetime.datetime.now)
+
+
 class DatabaseManager:
     logger = logging.getLogger(__name__)
     FAIL_FLAG = '__fail__'
@@ -202,6 +217,8 @@ class DatabaseManager:
                 self._migrate(2)
             elif "file_unique_id" not in msg_log_columns:
                 self._migrate(3)
+        if not ImagePHash.table_exists():
+            database.create_tables([ImagePHash], safe=True)
         self.logger.debug("Database migration finished...")
 
     def stop_worker(self):
@@ -212,7 +229,7 @@ class DatabaseManager:
         """
         Initializing tables.
         """
-        database.create_tables([ChatAssoc, MsgLog, SlaveChatInfo, TopicAssoc])
+        database.create_tables([ChatAssoc, MsgLog, SlaveChatInfo, TopicAssoc, ImagePHash])
 
     @staticmethod
     def _migrate(i: int):
@@ -688,3 +705,47 @@ class DatabaseManager:
             ).order_by(MsgLog.time.desc()).limit(1).first()
         except DoesNotExist:
             return None
+
+    @staticmethod
+    def upsert_image_phash(path: str,
+                           phash: str,
+                           phash_prefix: str,
+                           tg_file_id: Optional[str] = None,
+                           tg_file_unique_id: Optional[str] = None,
+                           tg_media_type: str = "photo",
+                           mime: Optional[str] = None,
+                           width: Optional[int] = None,
+                           height: Optional[int] = None,
+                           file_size: Optional[int] = None):
+        row = ImagePHash.get_or_none(ImagePHash.path == path)
+        now = datetime.datetime.now()
+        if row is None:
+            row = ImagePHash(path=path)
+            row.created_at = now
+
+        row.phash = phash
+        row.phash_prefix = phash_prefix
+        row.tg_file_id = tg_file_id
+        row.tg_file_unique_id = tg_file_unique_id
+        row.tg_media_type = tg_media_type
+        row.mime = mime
+        row.width = width
+        row.height = height
+        row.file_size = file_size
+        row.last_seen_at = now
+        row.save()
+
+    @staticmethod
+    def find_recent_image_candidates_by_prefix(phash_prefix: str,
+                                                tg_media_type: str = "photo",
+                                                limit: int = 300) -> List[ImagePHash]:
+        query = (ImagePHash
+                 .select()
+                 .where(
+                     (ImagePHash.phash_prefix == phash_prefix) &
+                     (ImagePHash.tg_file_id.is_null(False)) &
+                     (ImagePHash.tg_media_type == tg_media_type)
+                 )
+                 .order_by(ImagePHash.last_seen_at.desc())
+                 .limit(limit))
+        return list(query)

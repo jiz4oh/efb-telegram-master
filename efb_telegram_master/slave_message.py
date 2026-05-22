@@ -521,6 +521,13 @@ class SlaveMessageProcessor(LocaleMixin):
                     message.reply_text(file_too_large)
                     return message
 
+            reusable_file_id: Optional[str] = None
+            if msg.path and (not old_msg_id) and (not msg.edit_media):
+                media_type = "document" if send_as_file else "photo"
+                reusable_file_id = self.channel.image_dedupe.try_find_similar_file_id(msg.path, tg_media_type=media_type)
+                if reusable_file_id:
+                    self.logger.debug("[%s] Found similar %s in Telegram cloud, reuse file_id.", msg.uid, media_type)
+
             if old_msg_id:
                 try:
                     if edit_media:
@@ -545,38 +552,66 @@ class SlaveMessageProcessor(LocaleMixin):
                     msg.file.seek(0)
                     # Fall through to send a new message
 
+            def _send_document(file_or_id) -> telegram.Message:
+                tg_msg = self.bot.send_document(
+                    tg_dest,
+                    file_or_id,
+                    prefix=text_prefix,
+                    suffix=reactions,
+                    caption=text,
+                    parse_mode="HTML",
+                    filename=msg.filename,
+                    message_thread_id=thread_id,
+                    reply_markup=reply_markup,
+                    disable_notification=silent,
+                    **self.build_reply_target_kwargs(target_msg_id, target_quote_text),
+                )
+
+                doc = tg_msg.document if getattr(tg_msg, "document", None) else None
+                self.channel.image_dedupe.enqueue_index(
+                    msg.path,
+                    doc.file_id if doc else None,
+                    doc.file_unique_id if doc else None,
+                    tg_media_type="document",
+                    mime=msg.mime,
+                )
+                return tg_msg
+
+            file_or_id = reusable_file_id or self.process_file_obj(msg.file, msg.path)
             # Sending new message (either initially or as fallback from edit)
             if send_as_file:
                 assert msg.path
-                file = self.process_file_obj(msg.file, msg.path)
-                return self.bot.send_document(tg_dest, file, prefix=text_prefix, suffix=reactions,
-                                              caption=text, parse_mode="HTML", filename=msg.filename,
-                                              message_thread_id=thread_id,
-                                              reply_markup=reply_markup,
-                                              disable_notification=silent,
-                                              **self.build_reply_target_kwargs(target_msg_id, target_quote_text))
+                return _send_document(
+                    file_or_id=file_or_id,
+                )
             else:
                 try:
                     assert msg.path
-                    file = self.process_file_obj(msg.file, msg.path)
-                    return self.bot.send_photo(tg_dest, file, prefix=text_prefix, suffix=reactions,
-                                               caption=text, parse_mode="HTML",
-                                               message_thread_id=thread_id,
-                                               reply_markup=reply_markup,
-                                               disable_notification=silent,
-                                               **self.build_reply_target_kwargs(target_msg_id, target_quote_text))
+                    tg_msg = self.bot.send_photo(tg_dest, file_or_id, prefix=text_prefix, suffix=reactions,
+                                                    caption=text, parse_mode="HTML",
+                                                    message_thread_id=thread_id,
+                                                    reply_markup=reply_markup,
+                                                    disable_notification=silent,
+                                                    **self.build_reply_target_kwargs(target_msg_id, target_quote_text))
+
+                    photo = tg_msg.photo[-1] if getattr(tg_msg, "photo", None) else None
+                    self.channel.image_dedupe.enqueue_index(
+                        msg.path,
+                        photo.file_id if photo else None,
+                        photo.file_unique_id if photo else None,
+                        tg_media_type="photo",
+                        mime=msg.mime,
+                    )
+                    return tg_msg
                 except telegram.error.BadRequest as e:
                     self.logger.error('[%s] Failed to send it as image, sending as document. Reason: %s',
                                       msg.uid, e)
                     assert msg.path
                     msg.file.seek(0) # Rewind file pointer
                     file = self.process_file_obj(msg.file, msg.path)
-                    return self.bot.send_document(tg_dest, file, prefix=text_prefix, suffix=reactions,
-                                                  caption=text, parse_mode="HTML", filename=msg.filename,
-                                                  message_thread_id=thread_id,
-                                                  reply_markup=reply_markup,
-                                                  disable_notification=silent,
-                                                  **self.build_reply_target_kwargs(target_msg_id, target_quote_text))
+                    return _send_document(
+                        file_or_id=file,
+                    )
         finally:
             if msg.file:
                 msg.file.close()
@@ -618,6 +653,12 @@ class SlaveMessageProcessor(LocaleMixin):
                     message.reply_text(file_too_large)
                     return message
 
+            reusable_file_id: Optional[str] = None
+            if msg.path and (not old_msg_id) and (not msg.edit_media):
+                reusable_file_id = self.channel.image_dedupe.try_find_similar_file_id(msg.path, tg_media_type="animation")
+                if reusable_file_id:
+                    self.logger.debug("[%s] Found similar animation in Telegram cloud, reuse file_id.", msg.uid)
+
             if old_msg_id:
                 if edit_media:
                     assert msg.file and msg.path
@@ -630,15 +671,36 @@ class SlaveMessageProcessor(LocaleMixin):
                                                      caption=text, parse_mode="HTML")
             else:
                 assert msg.file and msg.path
-                file = self.process_file_obj(msg.file, msg.path)
-                file_: Union[IO[bytes], bytes] = open(utils.coerce_local_path(file), 'rb') if isinstance(file, str) else file
-                return self.bot.send_animation(tg_dest, InputFile(file_, filename=msg.filename),
-                                               prefix=text_prefix, suffix=reactions,
-                                               caption=text, parse_mode="HTML",
-                                               message_thread_id=thread_id,
-                                               reply_markup=reply_markup,
-                                               disable_notification=silent,
-                                               **self.build_reply_target_kwargs(target_msg_id, target_quote_text))
+                if reusable_file_id:
+                    animation = reusable_file_id 
+                else:
+                    file = self.process_file_obj(msg.file, msg.path)
+                    animation: Union[IO[bytes], bytes] = open(utils.coerce_local_path(file), 'rb') if isinstance(file, str) else file
+                if not isinstance(animation, str):
+                    animation = InputFile(animation, filename=msg.filename)
+
+                tg_msg = self.bot.send_animation(
+                    tg_dest,
+                    animation,
+                    prefix=text_prefix,
+                    suffix=reactions,
+                    caption=text,
+                    parse_mode="HTML",
+                    message_thread_id=thread_id,
+                    reply_markup=reply_markup,
+                    disable_notification=silent,
+                    **self.build_reply_target_kwargs(target_msg_id, target_quote_text),
+                )
+
+                ani = tg_msg.animation if getattr(tg_msg, "animation", None) else None
+                self.channel.image_dedupe.enqueue_index(
+                    msg.path,
+                    ani.file_id if ani else None,
+                    ani.file_unique_id if ani else None,
+                    tg_media_type="animation",
+                    mime=msg.mime,
+                )
+                return tg_msg
         finally:
             if msg.file is not None:
                 msg.file.close()
@@ -661,6 +723,12 @@ class SlaveMessageProcessor(LocaleMixin):
             self.logger.debug("[%s] Size of %s is %s.", msg.uid, msg.path, os.stat(msg.path).st_size)
 
         try:
+            reusable_file_id: Optional[str] = None
+            if msg.path and (not old_msg_id) and (not msg.edit_media):
+                reusable_file_id = self.channel.image_dedupe.try_find_similar_file_id(msg.path, tg_media_type="sticker")
+                if reusable_file_id:
+                    self.logger.debug("[%s] Found similar sticker in Telegram cloud, reuse file_id.", msg.uid)
+
             # If only media changed (e.g., replaced sticker), send new one replying to old.
             # Telegram doesn't support editing sticker media directly.
             if msg.edit_media and old_msg_id is not None:
@@ -702,15 +770,30 @@ class SlaveMessageProcessor(LocaleMixin):
                         return message
 
                 try:
-                    pic_img: Image = Image.open(msg.file)
-                    webp_img = tempfile.NamedTemporaryFile(suffix='.webp')
-                    pic_img.convert("RGBA").save(webp_img, 'webp')
-                    webp_img.seek(0)
-                    file = self.process_file_obj(webp_img, webp_img.name)
-                    return self.bot.send_sticker(tg_dest, file, reply_markup=sticker_reply_markup,
-                                                 message_thread_id=thread_id,
-                                                 disable_notification=silent,
-                                                 **self.build_reply_target_kwargs(target_msg_id, target_quote_text))
+                    if not reusable_file_id:
+                        pic_img: Image = Image.open(msg.file)
+                        webp_img = tempfile.NamedTemporaryFile(suffix='.webp')
+                        pic_img.convert("RGBA").save(webp_img, 'webp')
+                        webp_img.seek(0)
+                        file = self.process_file_obj(webp_img, webp_img.name)
+                    file_or_id = reusable_file_id or file
+                    tg_msg = self.bot.send_sticker(
+                        tg_dest,
+                        file_or_id,
+                        reply_markup=sticker_reply_markup,
+                        message_thread_id=thread_id,
+                        disable_notification=silent,
+                        **self.build_reply_target_kwargs(target_msg_id, target_quote_text),
+                    )
+                    st = tg_msg.sticker if getattr(tg_msg, "sticker", None) else None
+                    self.channel.image_dedupe.enqueue_index(
+                        msg.path,
+                        st.file_id if st else None,
+                        st.file_unique_id if st else None,
+                        tg_media_type="sticker",
+                        mime=msg.mime,
+                    )
+                    return tg_msg
                 except IOError:
                     self.logger.warning("[%s] Failed to convert image to webp sticker, sending as document.", msg.uid)
                     assert msg.file and msg.path
@@ -1241,3 +1324,4 @@ class SlaveMessageProcessor(LocaleMixin):
         if self.channel.flag("local_tdlib_api"):
             return Path(path).absolute().as_uri()
         return file
+
