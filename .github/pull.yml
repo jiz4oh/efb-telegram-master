@@ -1,0 +1,6 @@
+version: "1"
+rules:
+  - base: master
+    upstream: ehForwarderBot:master # change `wei` to the owner of upstream repo
+    mergeMethod: hardreset
+    mergeUnstable: true
