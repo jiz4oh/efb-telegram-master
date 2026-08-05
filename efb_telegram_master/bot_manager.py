@@ -691,7 +691,16 @@ class TelegramBotManager(LocaleMixin):
         empty = True
         if isinstance(file, str):
             local_path = utils.coerce_local_path(file)
-            empty = os.stat(local_path).st_size == 0
+            is_local_reference = (
+                file.startswith("file://")
+                or os.path.isabs(local_path)
+                or os.path.exists(local_path)
+            )
+            if is_local_reference and os.path.exists(local_path):
+                empty = os.stat(local_path).st_size == 0
+            else:
+                # Telegram file IDs and URLs are remote references, not local paths.
+                empty = False
         elif hasattr(file, "seekable"):
             if file.seekable():
                 file.seek(0, 2)
