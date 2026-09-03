@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:27046c1555c585897fad90d1ed08068cea41a1ee64c81ad250d05a327d2e4f6d"
+content_hash = "sha256:5b3bfba89b3880d7fb46379250d7c744b6c727cfd772b00aec5f3b372d150044"
 
 [[metadata.targets]]
 requires_python = "==3.14.*"
@@ -317,17 +317,6 @@ files = [
 ]
 
 [[package]]
-name = "retrying"
-version = "1.4.2"
-requires_python = ">=3.6"
-summary = "Retrying"
-groups = ["default"]
-marker = "python_version == \"3.14\""
-files = [
-    {file = "retrying-1.4.2-py3-none-any.whl", hash = "sha256:bbc004aeb542a74f3569aeddf42a2516efefcdaff90df0eb38fbfbf19f179f59"},
-    {file = "retrying-1.4.2.tar.gz", hash = "sha256:d102e75d53d8d30b88562d45361d6c6c934da06fab31bd81c0420acb97a8ba39"},
-]
-
 [[package]]
 name = "ruamel-yaml"
 version = "0.19.1"

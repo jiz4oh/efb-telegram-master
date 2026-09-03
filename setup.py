@@ -56,7 +56,6 @@ setup(
         "ruamel.yaml",
         "pillow",
         "language-tags",
-        "retrying",
         "bullet>=2.2.0",
         "cjkwrap",
         "humanize",

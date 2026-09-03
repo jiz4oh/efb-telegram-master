@@ -9,7 +9,6 @@ from typing import List, TYPE_CHECKING, Callable
 
 import telegram.constants
 import telegram.error
-from retrying import retry
 from telegram import Update, InputFile, User, File, ForumTopic
 from telegram.ext import CallbackContext, Filters, MessageHandler, Updater, Dispatcher
 

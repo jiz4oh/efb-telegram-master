@@ -5,10 +5,8 @@ import itertools
 import logging
 import os
 import tempfile
-import threading
 import traceback
 import urllib.parse
-from collections import defaultdict
 from pathlib import Path
 from typing import Tuple, Optional, TYPE_CHECKING, List, IO, Union
 
@@ -1324,4 +1322,3 @@ class SlaveMessageProcessor(LocaleMixin):
         if self.channel.flag("local_tdlib_api"):
             return Path(path).absolute().as_uri()
         return file
-
